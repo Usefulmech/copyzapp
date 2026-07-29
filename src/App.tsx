@@ -171,7 +171,7 @@ export default function App() {
                   new Notification("New Clip Received", {
                     body: newestSnippet.body || newestSnippet.title || "Image snippet received",
                     icon: "/pwa-192x192.png",
-                    tag: "copyzap-new-clip"
+                    tag: "copyzapp-new-clip"
                   });
                 }
               }
@@ -208,7 +208,7 @@ export default function App() {
         fetchMemories(tokenData.shareToken);
       }
       // Trigger onboarding for new users
-      const completed = localStorage.getItem("copyzap_onboarding_completed");
+      const completed = localStorage.getItem("copyzapp_onboarding_completed");
       if (!completed) {
         setIsOnboardingOpen(true);
       }
@@ -419,9 +419,9 @@ export default function App() {
         {(deferredInstallPrompt || (typeof Notification !== "undefined" && notificationPermission === "default")) && (
           <div className="bg-[#161618] border border-[#2A2A2C] rounded-xl p-4.5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="space-y-1 max-w-2xl">
-              <h4 className="text-xs font-bold text-gray-200 font-mono">Unlock Full CopyZap Integration</h4>
+              <h4 className="text-xs font-bold text-gray-200 font-mono">Unlock Full CopyZapp Integration</h4>
               <p className="text-[11px] text-gray-400 font-mono leading-relaxed">
-                Install the CopyZap app on your home screen and allow push notifications to receive instant audio and system alerts when new snippets arrive.
+                Install the CopyZapp app on your home screen and allow push notifications to receive instant audio and system alerts when new snippets arrive.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3 shrink-0">
@@ -496,7 +496,7 @@ export default function App() {
         {connectionStatus === "offline" && (
           <div className="flex items-center gap-3 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-mono">
             <WifiOff className="w-4 h-4 text-rose-400 shrink-0" />
-            <span>Can't reach the server. Check that the CopyZap server process is running.</span>
+            <span>Can't reach the server. Check that the CopyZapp server process is running.</span>
             <button
               onClick={() => tokenInfo?.shareToken && fetchMemories(tokenInfo.shareToken)}
               className="ml-auto px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-rose-300 transition-colors"
@@ -510,7 +510,7 @@ export default function App() {
         {loading && (
           <div className="flex flex-col items-center justify-center py-16 space-y-3">
             <RefreshCw className="w-7 h-7 text-emerald-400 animate-spin" />
-            <span className="text-xs text-gray-400 font-mono">Syncing stream with CopyZap bridge…</span>
+            <span className="text-xs text-gray-400 font-mono">Syncing stream with CopyZapp bridge…</span>
           </div>
         )}
 
@@ -574,7 +574,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-400 font-mono">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-emerald-400" />
-            <span className="font-bold text-[#E0E0E1]">CopyZap Bridge</span>
+            <span className="font-bold text-[#E0E0E1]">CopyZapp Bridge</span>
             <span>— Share it. Zap it.</span>
           </div>
           <div className="flex flex-wrap items-center gap-5 text-[11px]">

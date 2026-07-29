@@ -129,7 +129,7 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
               <Sparkles className="w-4.5 h-4.5 fill-indigo-400/20" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-[#E0E0E1]">CopyZap AI Assistant</h2>
+              <h2 className="text-sm font-bold text-[#E0E0E1]">CopyZapp AI Assistant</h2>
               <p className="text-[10px] text-gray-400 font-mono">Talk to your snippets & files</p>
             </div>
           </div>

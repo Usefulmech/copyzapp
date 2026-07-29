@@ -34,7 +34,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({ imageUrl, title, o
             </button>
             <a
               href={imageUrl}
-              download={`copyzap-${Date.now()}.png`}
+              download={`copyzapp-${Date.now()}.png`}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-black rounded-lg transition-colors"
             >
               <Download className="w-3.5 h-3.5" />

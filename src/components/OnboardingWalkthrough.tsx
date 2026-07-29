@@ -26,8 +26,8 @@ export const OnboardingWalkthrough: React.FC<OnboardingWalkthroughProps> = ({
   const steps = [
     {
       icon: <Zap className="w-10 h-10 text-emerald-400 animate-pulse" />,
-      title: "Welcome to CopyZap!",
-      desc: "CopyZap is a premium, local-first clipboard bridge that connects your phone and PC. Send texts, links, or images instantly across devices without creating accounts or syncing passwords.",
+      title: "Welcome to CopyZapp!",
+      desc: "CopyZapp is a premium, local-first clipboard bridge that connects your phone and PC. Send texts, links, or images instantly across devices without creating accounts or syncing passwords.",
       details: [
         "Instant 4-second short-polling synchronization.",
         "Ephemeral stream: snippets auto-expire after 24 hours.",
@@ -47,17 +47,17 @@ export const OnboardingWalkthrough: React.FC<OnboardingWalkthroughProps> = ({
     {
       icon: <Smartphone className="w-10 h-10 text-indigo-400 animate-bounce" />,
       title: "Step 2: Add to Home Screen (PWA)",
-      desc: "Once paired, install CopyZap as a Progressive Web App (PWA) in Chrome or Safari. On Android, it registers as a system Share Target so you can share directly to your PC!",
+      desc: "Once paired, install CopyZapp as a Progressive Web App (PWA) in Chrome or Safari. On Android, it registers as a system Share Target so you can share directly to your PC!",
       details: [
         "Android: Chrome Menu (⋮) → 'Add to Home Screen' to register.",
-        "Tap Share in any app (YouTube, Photos, Twitter) → Select CopyZap.",
+        "Tap Share in any app (YouTube, Photos, Twitter) → Select CopyZapp.",
         "iOS: Safari Share → 'Add to Home Screen' for instant dashboard access.",
       ],
     },
     {
       icon: <Sparkles className="w-10 h-10 text-indigo-400" />,
       title: "Step 3: Meet Your AI Assistant",
-      desc: "CopyZap comes with a built-in Gemini AI Assistant. Analyze, summarize, or translate any shared snippets and talk to your files directly from the dashboard.",
+      desc: "CopyZapp comes with a built-in Gemini AI Assistant. Analyze, summarize, or translate any shared snippets and talk to your files directly from the dashboard.",
       details: [
         "✨ Tap the Sparkles icon on any snippet to add it as context.",
         "Ask questions directly via the 'AI Assistant' in the header.",
@@ -81,7 +81,7 @@ export const OnboardingWalkthrough: React.FC<OnboardingWalkthroughProps> = ({
   };
 
   const handleComplete = () => {
-    localStorage.setItem("copyzap_onboarding_completed", "true");
+    localStorage.setItem("copyzapp_onboarding_completed", "true");
     onClose();
   };
 

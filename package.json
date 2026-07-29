@@ -1,5 +1,5 @@
 {
-  "name": "copyzap",
+  "name": "copyzapp",
   "private": true,
   "version": "1.0.0",
   "description": "Local-first ephemeral phone-to-PC clipboard bridge with WiFi/Hotspot/Cloud pairing",

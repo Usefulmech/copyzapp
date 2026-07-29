@@ -1,5 +1,5 @@
 /**
- * CopyZap — Local Development Server
+ * CopyZapp — Local Development Server
  *
  * Run: npm run dev
  *
@@ -35,7 +35,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`\n🚀 CopyZap running on http://0.0.0.0:${PORT}`);
+    console.log(`\n🚀 CopyZapp running on http://0.0.0.0:${PORT}`);
     console.log(`   🌐 Local:  http://localhost:${PORT}`);
 
     const ifaces = os.networkInterfaces();

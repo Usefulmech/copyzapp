@@ -72,7 +72,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-sm sm:text-base lg:text-lg font-bold text-[#E0E0E1] tracking-tight">
-                CopyZap
+                CopyZapp
               </h1>
               {/* Mobile-only: compact status dot inline with brand */}
               <span

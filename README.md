@@ -1,6 +1,6 @@
-# CopyZap - Phone-to-PC Clipboard Bridge
+# CopyZapp - Phone-to-PC Clipboard Bridge
 
-CopyZap is a local-first, premium, and PWA-responsive clipboard bridge designed to instantly stream text, links, and images from your mobile device directly to your PC. 
+CopyZapp is a local-first, premium, and PWA-responsive clipboard bridge designed to instantly stream text, links, and images from your mobile device directly to your PC. 
 
 Built with React, Express, Vite, and TailwindCSS, it functions as a lightweight ephemeral holding tank. All shared content automatically expires and vanishes after 24 hours (unless manually pinned).
 
@@ -13,7 +13,7 @@ Built with React, Express, Vite, and TailwindCSS, it functions as a lightweight 
   - **Windows Mobile Hotspot**: Connect your phone directly to your PC's hotspot for low-latency transfers on the go.
   - **Localhost**: Seamless testing via emulators or on a single device.
   - **Cloud Mode**: Global availability via public deployments.
-- **PWA & Android Share Target**: Install CopyZap as an app. It integrates directly into the Android system share sheet, allowing you to share from Chrome, X, YouTube, or your photo gallery instantly.
+- **PWA & Android Share Target**: Install CopyZapp as an app. It integrates directly into the Android system share sheet, allowing you to share from Chrome, X, YouTube, or your photo gallery instantly.
 - **Capability-Token Security**: Unique randomly-generated API tokens prevent unauthorized pushes to your stream.
 - **Hybrid Storage System**: Automatic local file storage in development (data/ folder) and cloud storage via Vercel KV (Redis) and Vercel Blob in production.
 - **Sleek Dark Mode Aesthetics**: Glassmorphic UI with micro-animations, interactive FAB speed dials, and responsive mobile bottom sheets.
@@ -43,13 +43,13 @@ Built with React, Express, Vite, and TailwindCSS, it functions as a lightweight 
    ```
    At startup, the server automatically scans your network adapters and displays all available URLs:
    ```
-   CopyZap running on http://0.0.0.0:3000
+   CopyZapp running on http://0.0.0.0:3000
       Local:   http://localhost:3000
       Wi-Fi:   http://192.168.1.15:3000
       Hotspot: http://192.168.137.1:3000
    ```
 4. **Pair Your Phone**:
-   - Open CopyZap in your PC browser.
+   - Open CopyZapp in your PC browser.
    - Click **Pair Phone QR** in the top header.
    - Choose your connection mode (Wi-Fi or Hotspot).
    - Scan the generated QR code with your phone.
@@ -58,10 +58,10 @@ Built with React, Express, Vite, and TailwindCSS, it functions as a lightweight 
 
 ## Production Deployment (Vercel)
 
-CopyZap is configured to deploy directly to https://copyzap.vercel.app with Zero-Configuration.
+CopyZapp is configured to deploy directly to https://copyzapp.vercel.app with Zero-Configuration.
 
 ### 1. Link Free Storage Integrations (Vercel KV & Vercel Blob)
-Since serverless functions are stateless, CopyZap uses Vercel's free storage offerings:
+Since serverless functions are stateless, CopyZapp uses Vercel's free storage offerings:
 * **Vercel KV (Redis)** (Free 256MB / 3k daily ops): Stores tokens & snippets.
 * **Vercel Blob** (Free 250MB / 2k monthly ops): Stores shared images.
 
@@ -75,7 +75,7 @@ Since serverless functions are stateless, CopyZap uses Vercel's free storage off
 
 ### 2. Required Environment Variables
 In your Vercel Project settings, configure:
-- `APP_URL`: The production URL of your deployment (set to `https://copyzap.vercel.app`). *Required to build accurate QR codes and target endpoints.*
+- `APP_URL`: The production URL of your deployment (set to `https://copyzapp.vercel.app`). *Required to build accurate QR codes and target endpoints.*
 - `GEMINI_API_KEY`: Your Google Gemini API Key.
 - `KV_REST_API_URL` & `KV_REST_API_TOKEN`: Automatically populated when you connect Vercel KV.
 - `BLOB_READ_WRITE_TOKEN`: Automatically populated when you connect Vercel Blob.
@@ -105,7 +105,7 @@ To send text or files directly from your phone's native Share menu:
 2. Tap the browser options menu (three dots icon) in Chrome.
 3. Select **Add to Home screen** or **Install app**.
 4. Once installed, select any text, link, or image in another app (e.g. YouTube, Twitter) and tap **Share**.
-5. Select **CopyZap** from the share sheet to instantly stream it to your PC dashboard!
+5. Select **CopyZapp** from the share sheet to instantly stream it to your PC dashboard!
 
 ### iOS (Safari)
 1. Scan the Pairing QR code on Safari.

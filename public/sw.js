@@ -1,12 +1,12 @@
-// CopyZap Service Worker v2 — PWA + Multi-Network
-const CACHE_NAME = 'copyzap-v2';
+// CopyZapp Service Worker v2 — PWA + Multi-Network
+const CACHE_NAME = 'copyzapp-v2';
 const SHELL_ASSETS = [
   '/',
   '/index.html',
 ];
 
 // Network-info cache: short TTL (60s), so stale data doesn't linger
-const NETWORK_INFO_CACHE = 'copyzap-network-v1';
+const NETWORK_INFO_CACHE = 'copyzapp-network-v1';
 const NETWORK_INFO_TTL_MS = 60 * 1000;
 
 self.addEventListener('install', (event) => {

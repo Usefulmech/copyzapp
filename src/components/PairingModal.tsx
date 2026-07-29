@@ -191,7 +191,7 @@ export const PairingModal: React.FC<PairingModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-[#E0E0E1]">Phone Pairing & Setup</h2>
-              <p className="text-[11px] text-gray-400 font-mono">Connect your device to this CopyZap bridge</p>
+              <p className="text-[11px] text-gray-400 font-mono">Connect your device to this CopyZapp bridge</p>
             </div>
           </div>
           <button
@@ -290,7 +290,7 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                   ) : qrCodeDataUrl ? (
                     <img
                       src={qrCodeDataUrl}
-                      alt="CopyZap Phone Pairing QR Code"
+                      alt="CopyZapp Phone Pairing QR Code"
                       className="w-52 h-52 object-contain"
                     />
                   ) : (
@@ -414,7 +414,7 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                 <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
                   <strong className="font-semibold block text-emerald-300 mb-1">Native Android Share Sheet</strong>
-                  CopyZap registers as an official OS Share Target via Web App Manifest. Once added to your phone home screen, it appears in the Android share sheet from Chrome, Twitter, Photos, YouTube, and more!
+                  CopyZapp registers as an official OS Share Target via Web App Manifest. Once added to your phone home screen, it appears in the Android share sheet from Chrome, Twitter, Photos, YouTube, and more!
                 </div>
               </div>
 
@@ -428,12 +428,12 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                   {
                     step: 2,
                     title: 'Tap Chrome Menu (⋮) → "Add to Home Screen"',
-                    desc: "This installs CopyZap as a PWA with the Web Share Target manifest registered.",
+                    desc: "This installs CopyZapp as a PWA with the Web Share Target manifest registered.",
                   },
                   {
                     step: 3,
-                    title: "Share anything to CopyZap",
-                    desc: 'Tap share in any Android app → Select CopyZap. The content appears on your PC dashboard in < 2 seconds!',
+                    title: "Share anything to CopyZapp",
+                    desc: 'Tap share in any Android app → Select CopyZapp. The content appears on your PC dashboard in < 2 seconds!',
                   },
                 ].map(({ step, title, desc }) => (
                   <li key={step} className="flex items-start gap-4 p-4 rounded-lg bg-[#0E0E10] border border-[#2A2A2C] transition-all hover:border-[#3A3A3C]">
@@ -463,8 +463,8 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                 </p>
                 <div className="space-y-2 text-xs font-mono text-gray-300">
                   {[
-                    'In Edge or Chrome, click the App Install icon in the address bar, or go to Menu → Apps → "Install CopyZap".',
-                    "Pin CopyZap to your Windows Taskbar or Start Menu.",
+                    'In Edge or Chrome, click the App Install icon in the address bar, or go to Menu → Apps → "Install CopyZapp".',
+                    "Pin CopyZapp to your Windows Taskbar or Start Menu.",
                     "Keep it running in the background — new snippets appear within 4 seconds of sharing from your phone!",
                   ].map((step, i) => (
                     <div key={i} className="flex items-start gap-2.5">
@@ -481,10 +481,10 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                   <Cloud className="w-3.5 h-3.5" /> Full Cloud Deployment (Access from Anywhere)
                 </h4>
                 <div className="space-y-1.5 text-[11px] font-mono text-gray-400">
-                  <p>To make CopyZap accessible over the internet (not just local network):</p>
+                  <p>To make CopyZapp accessible over the internet (not just local network):</p>
                   <ol className="list-decimal list-inside space-y-1.5 pl-1">
                     <li>Deploy to a cloud host (e.g. <span className="text-indigo-300">Railway, Fly.io, Render, or Google Cloud Run</span>).</li>
-                    <li>Set the <code className="text-indigo-300">APP_URL</code> environment variable to your deployment URL (e.g. <code className="text-indigo-300">https://copyzap.yourapp.com</code>).</li>
+                    <li>Set the <code className="text-indigo-300">APP_URL</code> environment variable to your deployment URL (e.g. <code className="text-indigo-300">https://copyzapp.yourapp.com</code>).</li>
                     <li>The Cloud mode QR in the Pair tab will automatically use this URL.</li>
                     <li>Phone can now share from anywhere — WiFi, mobile data, etc.</li>
                   </ol>
@@ -500,7 +500,7 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                 <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
                 <div>
                   <strong className="font-semibold block text-indigo-300 mb-1">iOS Shortcuts Bridge</strong>
-                  Apple Safari restricts Web Share Target in PWAs. On iPhone/iPad, use Apple Shortcuts to POST directly to your CopyZap share target URL.
+                  Apple Safari restricts Web Share Target in PWAs. On iPhone/iPad, use Apple Shortcuts to POST directly to your CopyZapp share target URL.
                 </div>
               </div>
 
@@ -512,7 +512,7 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                     'Set input to "Receive Shares (Text, URLs, Images)" in Share Sheet.',
                     `Add action: "Get Contents of URL" with POST method to:\n${activeShareUrl}`,
                     "Add form fields: title, text, url.",
-                    'Name shortcut "CopyZap" and save to Share Sheet!',
+                    'Name shortcut "CopyZapp" and save to Share Sheet!',
                   ].map((step, i) => (
                     <li key={i} className="flex items-start gap-3">
                       <span className="text-indigo-400 font-bold shrink-0 text-sm">{i + 1}.</span>

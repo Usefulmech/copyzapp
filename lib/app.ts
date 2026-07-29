@@ -1,5 +1,5 @@
 /**
- * CopyZap Express App
+ * CopyZapp Express App
  *
  * This module exports the configured Express application.
  * It is shared between:
@@ -372,8 +372,8 @@ export function createApp() {
     const { shareToken } = req.params;
     const host = process.env.APP_URL ?? `http://localhost:${PORT}`;
     const manifest = {
-      name: "CopyZap",
-      short_name: "CopyZap",
+      name: "CopyZapp",
+      short_name: "CopyZapp",
       description: "Local-first ephemeral bridge between your phone and PC",
       start_url: "/?mode=pwa",
       display: "standalone",
