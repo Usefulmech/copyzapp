@@ -81,7 +81,7 @@ export const Header: React.FC<HeaderProps> = ({
               />
             </div>
             <p className="text-[10px] sm:text-[11px] text-gray-500 font-mono hidden sm:block">
-              Ephemeral Phone → PC Bridge • 24h Auto-Expiry
+              Share it. Zap it. • 24h Auto-Expiry
             </p>
           </div>
         </div>

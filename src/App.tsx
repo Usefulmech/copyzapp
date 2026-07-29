@@ -575,7 +575,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-emerald-400" />
             <span className="font-bold text-[#E0E0E1]">CopyZap Bridge</span>
-            <span>— Phone to PC local-first ephemeral holding tank</span>
+            <span>— Share it. Zap it.</span>
           </div>
           <div className="flex flex-wrap items-center gap-5 text-[11px]">
             <span className="flex items-center gap-1.5 text-gray-300">
