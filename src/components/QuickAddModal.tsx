@@ -1,14 +1,13 @@
 import React, { useState } from "react";
 import { UserTokenInfo } from "../types";
+import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_LABEL, prepareUploadFile } from "../utils/fileTransfer";
 import {
   X,
   Upload,
   Plus,
   Link as LinkIcon,
   FileText,
-  Image as ImageIcon,
   Send,
-  Sparkles
 } from "lucide-react";
 
 interface QuickAddModalProps {
@@ -33,33 +32,33 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
 
   if (!isOpen || !tokenInfo) return null;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const selectFile = async (file: File) => {
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      alert(`File size exceeds the ${MAX_FILE_SIZE_LABEL} limit.`);
+      return;
+    }
+    const preparedFile = await prepareUploadFile(file);
+    setSelectedFile(preparedFile);
+    setPreviewUrl(preparedFile.type.startsWith("image/") ? URL.createObjectURL(preparedFile) : null);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      if (file.size > 5 * 1024 * 1024) {
-        alert("File size exceeds 5MB limit");
-        return;
-      }
-      setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+      await selectFile(e.target.files[0]);
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      if (file.type.startsWith("image/")) {
-        setSelectedFile(file);
-        setPreviewUrl(URL.createObjectURL(file));
-      }
+      await selectFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!text && !url && !selectedFile) {
-      alert("Please enter text, a URL, or attach an image.");
+      alert("Please enter text, a URL, or attach a file.");
       return;
     }
 
@@ -103,7 +102,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bottom-sheet sm:rounded-xl relative w-full sm:max-w-lg bg-[#161618] border border-[#2A2A2C] shadow-2xl overflow-hidden flex flex-col h-[90vh] sm:h-auto max-h-[92vh] sm:max-h-[88vh]">
+      <div className="bottom-sheet modal-panel relative sm:max-w-lg flex flex-col h-[90vh] sm:h-auto max-h-[92vh] sm:max-h-[88vh]">
         <div className="sm:hidden flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-[#3A3A3C]" />
         </div>
@@ -125,7 +124,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 flex-1 modal-scroll custom-scrollbar">
           <div>
             <label className="text-xs font-mono font-medium text-gray-300 block mb-1">
               Title <span className="text-gray-500">(Optional)</span>
@@ -172,7 +171,6 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
           >
             <input
               type="file"
-              accept="image/*"
               onChange={handleFileChange}
               className="hidden"
               id="quickadd-file-input"
@@ -180,13 +178,18 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
             <label htmlFor="quickadd-file-input" className="cursor-pointer space-y-1">
               <Upload className="w-6 h-6 text-gray-400 mx-auto" />
               <span className="text-xs text-gray-300 font-medium block">
-                {selectedFile ? selectedFile.name : "Drag image here or click to browse"}
+                {selectedFile ? selectedFile.name : "Drag any file here or click to browse"}
               </span>
-              <span className="text-[10px] text-gray-500 font-mono block">PNG, JPG, WebP, GIF up to 5MB</span>
+              <span className="text-[11px] text-gray-500 font-mono block">Any file format up to {MAX_FILE_SIZE_LABEL}</span>
             </label>
-            {previewUrl && (
+            {previewUrl ? (
               <div className="mt-3 relative w-20 h-20 rounded-lg overflow-hidden border border-[#2A2A2C]">
                 <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+              </div>
+            ) : selectedFile && (
+              <div className="mt-3 p-2 bg-[#161618] border border-[#2A2A2C] rounded-lg text-[11px] text-gray-300 font-mono flex items-center gap-2 max-w-full">
+                <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span className="truncate max-w-[150px]">{selectedFile.name}</span>
               </div>
             )}
           </div>
@@ -202,7 +205,7 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-black rounded-lg shadow-sm disabled:opacity-50 transition-all"
+              className="action-button px-4 py-2 text-xs bg-emerald-500 hover:bg-emerald-400 text-black shadow-sm disabled:opacity-50"
             >
               <Send className="w-3.5 h-3.5" />
               <span>{isSubmitting ? "Creating..." : "Add to Dashboard"}</span>

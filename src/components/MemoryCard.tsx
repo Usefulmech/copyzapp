@@ -39,7 +39,7 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({
 
   const handleCopyText = async () => {
     try {
-      if (memory.imageUrl) {
+      if (memory.imageUrl && isImage) {
         const res = await copyImageToClipboard(memory.imageUrl);
         setCopied(true);
         if (res.type === "image") {
@@ -47,6 +47,10 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({
         } else {
           onToast("Copied image URL!");
         }
+      } else if (memory.imageUrl) {
+        await copyToClipboard(memory.imageUrl);
+        setCopied(true);
+        onToast("Copied file URL!");
       } else {
         const textToCopy = memory.body || memory.link || memory.title;
         await copyToClipboard(textToCopy);
@@ -55,7 +59,7 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({
       }
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      onToast("Copy failed — try long-pressing the text");
+      onToast("Copy failed - try long-pressing the text");
     }
   };
 
@@ -68,7 +72,24 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({
   };
 
   const isLink = Boolean(memory.link);
-  const isImage = Boolean(memory.imageUrl);
+  const isFile = Boolean(memory.imageUrl);
+  const isImage = isFile && (memory.imageType?.startsWith("image/") ?? false);
+
+  const getOriginalFileName = (url: string) => {
+    if (url.startsWith("data:")) return memory.title || "Attached file";
+    const parts = url.split("/").pop()?.split("-");
+    const decode = (value: string) => {
+      try {
+        return decodeURIComponent(value);
+      } catch {
+        return value;
+      }
+    };
+    if (parts && parts.length >= 3) {
+      return decode(parts.slice(2).join("-"));
+    }
+    return decode(url.split("/").pop() || "file");
+  };
 
   return (
     <motion.div
@@ -91,6 +112,10 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({
             <span className="p-2 rounded-lg bg-[#212124] text-indigo-400 border border-[#2A2A2C] shrink-0">
               <ImageIcon className="w-4 h-4" />
             </span>
+          ) : isFile ? (
+            <span className="p-2 rounded-lg bg-[#212124] text-indigo-400 border border-[#2A2A2C] shrink-0">
+              <FileText className="w-4 h-4" />
+            </span>
           ) : isLink ? (
             <span className="p-2 rounded-lg bg-[#212124] text-emerald-400 border border-[#2A2A2C] shrink-0">
               <LinkIcon className="w-4 h-4" />
@@ -102,7 +127,7 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({
           )}
 
           <h3 className="text-xs font-bold text-[#E0E0E1] truncate leading-tight">
-            {memory.title || (isLink ? "Shared Link" : "Shared Snippet")}
+            {memory.title || (isLink ? "Shared Link" : isFile ? "Attached File" : "Shared Snippet")}
           </h3>
         </div>
 
@@ -139,7 +164,7 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({
         )}
 
         {/* Image Attachment Render */}
-        {memory.imageUrl && (
+        {memory.imageUrl && isImage && (
           <div
             onClick={() => onOpenImage(memory.imageUrl!, memory.title)}
             className="group/img relative rounded-lg overflow-hidden border border-[#2A2A2C] bg-[#0E0E10] cursor-pointer max-h-64 flex items-center justify-center"
@@ -155,6 +180,35 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({
                 <span>Expand Image</span>
               </span>
             </div>
+          </div>
+        )}
+
+        {/* Generic File Attachment Render */}
+        {memory.imageUrl && !isImage && (
+          <div className="p-3 rounded-lg bg-[#0E0E10] border border-[#2A2A2C] flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="p-2 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
+                <FileText className="w-4 h-4" />
+              </span>
+              <div className="min-w-0 leading-tight">
+                <p className="text-xs font-semibold text-gray-200 truncate font-mono">
+                  {getOriginalFileName(memory.imageUrl)}
+                </p>
+                <span className="text-[10px] text-gray-500 font-mono">
+                  {memory.imageType || "file"}
+                </span>
+              </div>
+            </div>
+            <a
+              href={memory.imageUrl}
+              download
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-emerald-400 hover:text-emerald-300 transition-colors shrink-0 min-h-[36px] px-2"
+            >
+              <span>Download</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
           </div>
         )}
 

@@ -1,15 +1,28 @@
 @import "tailwindcss";
 
 @layer base {
+  :root {
+    font-size: 16px;
+  }
+
   body {
     background-color: #0B0B0C;
     color: #E0E0E1;
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    font-size: 0.95rem;
+    line-height: 1.55;
+    text-rendering: optimizeLegibility;
   }
 
   /* Prevent content going under mobile browser chrome */
   html {
     scroll-behavior: smooth;
+  }
+
+  button,
+  input,
+  textarea {
+    font: inherit;
   }
 }
 
@@ -133,6 +146,61 @@
   border-radius: 1.25rem 1.25rem 0 0;
 }
 
+@media (min-width: 640px) {
+  .bottom-sheet {
+    animation: fadeIn 0.18s ease forwards;
+    border-radius: 1rem;
+  }
+}
+
+.modal-panel {
+  width: 100%;
+  background: #161618;
+  border: 1px solid #2A2A2C;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+@media (min-width: 1024px) {
+  .modal-panel {
+    font-size: 1rem;
+  }
+  .modal-panel .text-xs {
+    font-size: 0.85rem;
+  }
+  .modal-panel .text-sm {
+    font-size: 0.95rem;
+  }
+  .modal-panel .text-base {
+    font-size: 1.05rem;
+  }
+  .modal-panel .text-lg {
+    font-size: 1.2rem;
+  }
+}
+
+.modal-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.action-button {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.action-button:active {
+  transform: translateY(1px) scale(0.98);
+}
+
 /* ── Fade In (general modals) ────────────────────────────────────────────── */
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -217,4 +285,3 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-

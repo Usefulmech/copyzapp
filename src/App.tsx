@@ -10,6 +10,7 @@ import { AiChatDrawer } from "./components/AiChatDrawer";
 // Onboarding guide removed
 import { Toast } from "./components/Toast";
 import { playNotificationSound } from "./utils/audio";
+import { MAX_FILE_SIZE_BYTES } from "./utils/fileTransfer";
 import {
   Search,
   Zap,
@@ -160,20 +161,17 @@ export default function App() {
         const data = await res.json();
         setMemories((prevMemories) => {
           const incoming = data.snippets || [];
-          if (prevMemories.length > 0 && incoming.length > prevMemories.length) {
-            const hasNew = incoming.some(item => !prevMemories.some(m => m.id === item.id));
-            if (hasNew) {
-              playNotificationSound();
-              // Trigger browser push notification if granted
-              if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-                const newestSnippet = incoming.find(item => !prevMemories.some(m => m.id === item.id));
-                if (newestSnippet) {
-                  new Notification("New Clip Received", {
-                    body: newestSnippet.body || newestSnippet.title || "Image snippet received",
-                    icon: "/pwa-192x192.png",
-                    tag: "copyzapp-new-clip"
-                  });
-                }
+          const hasNew = incoming.some((item) => !prevMemories.some((m) => m.id === item.id));
+          if (hasNew) {
+            playNotificationSound();
+            if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+              const newestSnippet = incoming.find((item) => !prevMemories.some((m) => m.id === item.id));
+              if (newestSnippet) {
+                new Notification("New Clip Received", {
+                  body: newestSnippet.body || newestSnippet.title || "Image snippet received",
+                  icon: "/pwa-192x192.png",
+                  tag: "copyzapp-new-clip",
+                });
               }
             }
           }
@@ -221,12 +219,12 @@ export default function App() {
     init();
   }, []);
 
-  // 4-Second Short Polling Loop (Locked Core Spec 6.1)
+  // Poll more lightly so the app feels responsive without hammering the server.
   useEffect(() => {
     if (!tokenInfo?.shareToken) return;
     const interval = setInterval(() => {
       fetchMemories(tokenInfo.shareToken, true);
-    }, 4000);
+    }, 6000);
     return () => clearInterval(interval);
   }, [tokenInfo?.shareToken, fetchMemories]);
 
@@ -249,8 +247,12 @@ export default function App() {
         formData.append("token", tokenInfo.shareToken);
 
         if (files.length > 0) {
+          if (files[0].size > MAX_FILE_SIZE_BYTES) {
+            showToast("File exceeds the 25 MB limit.");
+            return;
+          }
           formData.append("image", files[0]);
-          formData.append("title", "Pasted Image");
+          formData.append("title", files[0].type.startsWith("image/") ? "Pasted Image" : files[0].name || "Pasted File");
         } else if (pastedText) {
           formData.append("text", pastedText);
           formData.append("title", pastedText.length > 30 ? pastedText.slice(0, 30) + "..." : "Pasted Snippet");
@@ -397,8 +399,8 @@ export default function App() {
               <Zap className="w-3.5 h-3.5 fill-emerald-400/20" />
             </span>
             <div className="font-mono text-[11px]">
-              <span className="font-semibold text-[#E0E0E1]">Phone → PC Stream:</span>{" "}
-              Share from Android Chrome, Twitter, Photos or YouTube → Appears here instantly.{" "}
+              <span className="font-semibold text-[#E0E0E1]">Phone to PC Stream:</span>{" "}
+              Share from Android Chrome, Twitter, Photos or YouTube. It appears here instantly.{" "}
               <span className="text-emerald-400 font-medium hidden sm:inline">
                 Auto-vanishes in 24h. No cleanup needed.
               </span>
@@ -417,7 +419,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main Dashboard — pad bottom for mobile bottom nav */}
+      {/* Main Dashboard - pad bottom for mobile bottom nav */}
       <main className="flex-1 max-w-none w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5 mb-bottom-nav lg:mb-0">
 
         {/* PWA & Notification Setup Banner */}
@@ -532,7 +534,7 @@ export default function App() {
               <p className="text-xs text-gray-400 font-mono">
                 {searchQuery || activeFilter !== "all"
                   ? "Try clearing your search or switching filters."
-                  : "Share text, links, or photos from your phone — or use the buttons below!"}
+                  : "Share text, links, photos, or files from your phone, or use the buttons below."}
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1 font-mono">
@@ -573,7 +575,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-emerald-400" />
             <span className="font-bold text-[#E0E0E1]">CopyZapp Bridge</span>
-            <span>— Share it. Zapp it.</span>
+            <span>- Share it. Zapp it.</span>
           </div>
           <div className="flex flex-wrap items-center gap-5 text-[11px]">
             <span className="flex items-center gap-1.5 text-gray-300">

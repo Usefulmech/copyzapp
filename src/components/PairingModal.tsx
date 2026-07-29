@@ -84,6 +84,9 @@ export const PairingModal: React.FC<PairingModalProps> = ({
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>("wifi");
   const [isQrLoading, setIsQrLoading] = useState(false);
 
+  const isMobileUserAgent = typeof navigator !== "undefined" && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const [showScanTab] = useState<boolean>(isMobileUserAgent);
+
   // QR Camera Scanner state
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -149,54 +152,6 @@ export const PairingModal: React.FC<PairingModalProps> = ({
     if (mode === "localhost") return true;
     return false;
   };
-
-  // Auto-select best available mode on open
-  useEffect(() => {
-    if (!isOpen || !networkInfo) return;
-    if (networkInfo.cloudUrl) {
-      setConnectionMode("cloud");
-    } else if (networkInfo.addresses.some((a) => a.type === "wifi")) {
-      setConnectionMode("wifi");
-    } else if (networkInfo.addresses.some((a) => a.type === "hotspot")) {
-      setConnectionMode("hotspot");
-    } else {
-      setConnectionMode("localhost");
-    }
-  }, [isOpen, networkInfo]);
-
-  // Generate QR whenever pairing URL changes
-  useEffect(() => {
-    if (!activePairingUrl) return;
-    setIsQrLoading(true);
-    QRCode.toDataURL(activePairingUrl, {
-      width: 280,
-      margin: 2,
-      color: { dark: "#0f172a", light: "#ffffff" },
-      errorCorrectionLevel: "M",
-    })
-      .then((url) => {
-        setQrCodeDataUrl(url);
-        setIsQrLoading(false);
-      })
-      .catch((err) => {
-        console.error("QR Code Error:", err);
-        setIsQrLoading(false);
-      });
-  }, [activePairingUrl]);
-
-  // Cleanup scanner on unmount, modal close or tab switch
-  useEffect(() => {
-    if (!isOpen) {
-      stopScanning();
-    }
-    return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-      }
-    };
-  }, [isOpen]);
-
-  if (!isOpen || !tokenInfo) return null;
 
   async function startScanning() {
     setScanError(null);
@@ -320,6 +275,55 @@ export const PairingModal: React.FC<PairingModalProps> = ({
     stopScanning();
   };
 
+
+  // Auto-select best available mode on open
+  useEffect(() => {
+    if (!isOpen || !networkInfo) return;
+    if (networkInfo.cloudUrl) {
+      setConnectionMode("cloud");
+    } else if (networkInfo.addresses.some((a) => a.type === "wifi")) {
+      setConnectionMode("wifi");
+    } else if (networkInfo.addresses.some((a) => a.type === "hotspot")) {
+      setConnectionMode("hotspot");
+    } else {
+      setConnectionMode("localhost");
+    }
+  }, [isOpen, networkInfo]);
+
+  // Generate QR whenever pairing URL changes
+  useEffect(() => {
+    if (!activePairingUrl) return;
+    setIsQrLoading(true);
+    QRCode.toDataURL(activePairingUrl, {
+      width: 280,
+      margin: 2,
+      color: { dark: "#0f172a", light: "#ffffff" },
+      errorCorrectionLevel: "M",
+    })
+      .then((url) => {
+        setQrCodeDataUrl(url);
+        setIsQrLoading(false);
+      })
+      .catch((err) => {
+        console.error("QR Code Error:", err);
+        setIsQrLoading(false);
+      });
+  }, [activePairingUrl]);
+
+  // Cleanup scanner on unmount, modal close or tab switch
+  useEffect(() => {
+    if (!isOpen) {
+      stopScanning();
+    }
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [isOpen]);
+
+  if (!isOpen || !tokenInfo) return null;
+
   const activeModeInfo = CONNECTION_MODES.find((m) => m.mode === connectionMode);
 
   return (
@@ -329,21 +333,21 @@ export const PairingModal: React.FC<PairingModalProps> = ({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bottom-sheet sm:rounded-xl relative w-full sm:max-w-2xl bg-[#161618] border border-[#2A2A2C] sm:border shadow-2xl flex flex-col h-[90vh] sm:h-auto max-h-[92vh] sm:max-h-[88vh] overflow-hidden">
+      <div className="bottom-sheet modal-panel relative sm:max-w-3xl flex flex-col h-[90vh] sm:h-auto max-h-[92vh] sm:max-h-[88vh]">
         {/* Drag Handle (mobile only) */}
         <div className="sm:hidden flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-[#3A3A3C]" />
         </div>
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2A2A2C]">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[#2A2A2C]">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-[#212124] border border-[#2A2A2C] flex items-center justify-center text-emerald-400">
               <QrCode className="w-4.5 h-4.5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-[#E0E0E1]">Phone Pairing & Setup</h2>
-              <p className="text-[11px] text-gray-400 font-mono">Connect your device to this CopyZapp bridge</p>
+              <h2 className="text-lg font-extrabold text-[#E0E0E1] tracking-tight">Phone Pairing & Setup</h2>
+              <p className="text-xs text-gray-400 font-mono">Connect your device to this CopyZapp bridge</p>
             </div>
           </div>
           <button
@@ -358,43 +362,45 @@ export const PairingModal: React.FC<PairingModalProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex border-b border-[#2A2A2C] bg-[#0E0E10] px-5 gap-2 overflow-x-auto no-scrollbar">
-          {(["qr", "scan"] as const).map((tab) => {
-            const icons = {
-              qr: <QrCode className="w-4 h-4" />,
-              scan: <Camera className="w-4 h-4" />,
-            };
-            const labels = {
-              qr: "Scan QR",
-              scan: "Camera Scanner",
-            };
-            return (
-              <button
-                key={tab}
-                onClick={() => handleTabChange(tab)}
-                className={`py-4.5 px-4.5 text-[13px] font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap shrink-0 min-h-[52px] ${
-                  activeTab === tab
-                    ? "border-emerald-500 text-emerald-400"
-                    : "border-transparent text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                {icons[tab]}
-                <span>{labels[tab]}</span>
-              </button>
-            );
-          })}
-        </div>
+        {showScanTab ? (
+          <div className="flex border-b border-[#2A2A2C] bg-[#0E0E10] px-5 gap-5 overflow-x-auto no-scrollbar">
+            {(["qr", "scan"] as const).map((tab) => {
+              const icons = {
+                qr: <QrCode className="w-4 h-4" />,
+                scan: <Camera className="w-4 h-4" />,
+              };
+              const labels = {
+                qr: "Scan QR",
+                scan: "Camera Scanner",
+              };
+              return (
+                <button
+                  key={tab}
+                  onClick={() => handleTabChange(tab)}
+                  className={`py-4 px-1 text-sm font-extrabold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap shrink-0 min-h-[58px] leading-none ${
+                    activeTab === tab
+                      ? "border-emerald-500 text-emerald-400"
+                      : "border-transparent text-gray-400 hover:text-gray-200"
+                  }`}
+                >
+                  {icons[tab]}
+                  <span>{labels[tab]}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
 
         {/* Modal Content */}
-        <div className="p-5 sm:p-7 overflow-y-auto flex-1 space-y-6 sm:space-y-7 custom-scrollbar">
+        <div className="p-5 sm:p-6 modal-scroll flex-1 space-y-6 sm:space-y-7 custom-scrollbar">
           {/* ── QR TAB ─────────────────────────────────────────────────────── */}
           {activeTab === "qr" && (
             <div className="space-y-6 sm:space-y-8">
               {/* Connection Mode Selector */}
               <div className="space-y-3">
-                <p className="text-sm font-semibold text-[#E0E0E1] flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-emerald-400" />
-                  Connection Mode — choose how phone reaches this PC
+                <p className="text-sm font-bold text-gray-200 flex items-center gap-2.5">
+                  <Globe className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Connection Mode - choose how phone reaches this PC</span>
                 </p>
                 <div className="flex flex-wrap gap-3">
                   {CONNECTION_MODES.map(({ mode, label, icon, description, color }) => {
@@ -427,35 +433,37 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                     <Info className="w-4 h-4 text-gray-400 shrink-0" />
                     {connectionMode === "wifi" && "Ensure phone & PC are on the same WiFi network (same router)."}
                     {connectionMode === "hotspot" && "Enable Windows Mobile Hotspot first, then connect your phone to it before scanning."}
-                    {connectionMode === "cloud" && "Works over internet — phone can be anywhere."}
+                    {connectionMode === "cloud" && "Works over internet - phone can be anywhere."}
                     {connectionMode === "localhost" && "For same device / emulator testing only."}
                   </p>
                 )}
               </div>
 
               {/* QR + Info side by side on desktop */}
-              <div className="flex flex-col sm:flex-row gap-7 items-center sm:items-start">
-                {/* QR Code */}
-                <div className="flex flex-col items-center justify-center p-4 sm:p-7 bg-white rounded-2xl shadow-lg border border-gray-200 shrink-0">
-                  {isQrLoading ? (
-                    <div className="w-44 h-44 sm:w-52 sm:h-52 flex items-center justify-center">
-                      <RefreshCw className="w-7 h-7 text-gray-400 animate-spin" />
-                    </div>
-                  ) : qrCodeDataUrl ? (
-                    <img
-                      src={qrCodeDataUrl}
-                      alt="CopyZapp Phone Pairing QR Code"
-                      className="w-44 h-44 sm:w-52 sm:h-52 object-contain"
-                    />
-                  ) : (
-                    <div className="w-44 h-44 sm:w-52 sm:h-52 flex items-center justify-center text-gray-400 font-mono text-sm">
-                      Generating...
-                    </div>
-                  )}
-                  <span className="text-xs font-bold text-gray-600 mt-4 text-center">
-                    Scan with Android Camera / Chrome
+              <div className="flex flex-col sm:flex-row gap-7 items-stretch">
+                {/* QR Code Card */}
+                <div className="flex flex-col items-center justify-center p-6 bg-[#0E0E10] border border-[#2A2A2C] rounded-xl w-full sm:w-auto sm:min-w-[240px] shrink-0 shadow-sm">
+                  <div className="p-3.5 bg-white rounded-lg shadow-inner flex items-center justify-center">
+                    {isQrLoading ? (
+                      <div className="w-40 h-40 sm:w-44 sm:h-44 flex items-center justify-center">
+                        <RefreshCw className="w-6 h-6 text-gray-400 animate-spin" />
+                      </div>
+                    ) : qrCodeDataUrl ? (
+                      <img
+                        src={qrCodeDataUrl}
+                        alt="CopyZapp Phone Pairing QR Code"
+                        className="w-40 h-40 sm:w-44 sm:h-44 object-contain"
+                      />
+                    ) : (
+                      <div className="w-40 h-40 sm:w-44 sm:h-44 flex items-center justify-center text-gray-400 font-mono text-xs">
+                        Generating...
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[11px] font-bold text-gray-400 mt-4 text-center font-mono">
+                    Scan with Android Camera
                   </span>
-                  <span className={`mt-2.5 text-xs font-black uppercase tracking-wider ${activeModeInfo?.color || "text-gray-400"}`}>
+                  <span className={`mt-2 text-xs font-black uppercase tracking-wider font-mono ${activeModeInfo?.color || "text-gray-400"}`}>
                     {activeModeInfo?.label} Mode
                   </span>
                 </div>
@@ -563,27 +571,33 @@ export const PairingModal: React.FC<PairingModalProps> = ({
           {activeTab === "scan" && (
             <div className="space-y-6">
               {!isScanning ? (
-                <div className="flex flex-col items-center justify-center p-8 bg-[#0E0E10] border border-[#2A2A2C] rounded-xl space-y-4 text-center">
-                  <Camera className="w-12 h-12 text-gray-500" />
+                <div className="flex flex-col items-center justify-center min-h-[320px] sm:min-h-[360px] p-6 sm:p-8 bg-[#0E0E10] border border-[#2A2A2C] rounded-xl space-y-5 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-[#161618] border border-[#2A2A2C] flex items-center justify-center text-emerald-400 shadow-inner">
+                    <Camera className="w-8 h-8" />
+                  </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-200">Scan PC Dashboard QR</h3>
-                    <p className="text-xs text-gray-400 font-mono mt-1 max-w-sm">
+                    <h3 className="text-base font-extrabold text-gray-100 tracking-tight">Scan PC Dashboard QR</h3>
+                    <p className="text-sm text-gray-400 mt-2 max-w-sm leading-relaxed">
                       Use your phone's browser camera to scan the QR code displayed on your PC screen and instantly pair the devices.
                     </p>
                   </div>
                   <button
                     onClick={startScanning}
-                    className="px-5 py-2 text-xs font-mono font-semibold bg-emerald-500 text-black hover:bg-emerald-400 rounded-lg transition-colors"
+                    className="action-button px-6 py-3 text-sm bg-emerald-500 text-black hover:bg-emerald-400 shadow-lg shadow-emerald-500/15"
                   >
+                    <Camera className="w-4 h-4" />
                     Start Scanner
                   </button>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center space-y-4">
-                  <div className="relative w-full max-w-md aspect-square bg-black border border-[#2A2A2C] rounded-xl overflow-hidden shadow-inner">
+                <div className="flex flex-col items-center justify-center w-full space-y-4">
+                  <div className="relative w-full max-w-xl h-[min(55vh,420px)] bg-black border border-[#2A2A2C] rounded-xl overflow-hidden shadow-inner">
                     <video
                       ref={videoRef}
                       className="w-full h-full object-cover"
+                      autoPlay
+                      playsInline
+                      muted
                     />
                     <div className="absolute inset-0 pointer-events-none border-[32px] border-black/50 flex items-center justify-center">
                       <div className="w-48 h-48 border-2 border-emerald-500 rounded-lg animate-pulse" />
@@ -602,7 +616,7 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                   </div>
                   <button
                     onClick={stopScanning}
-                    className="px-5 py-2 text-xs font-mono font-semibold bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/30 rounded-lg transition-colors"
+                    className="action-button px-5 py-2 text-xs bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/30"
                   >
                     Stop Scanner
                   </button>
@@ -613,7 +627,7 @@ export const PairingModal: React.FC<PairingModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 border-t border-[#2A2A2C] flex justify-end pb-safe">
+        <div className="p-4 border-t border-[#2A2A2C] flex justify-end pb-safe bg-[#161618] shrink-0">
           <button
             onClick={() => {
               onClose();

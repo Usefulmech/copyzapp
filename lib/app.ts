@@ -12,7 +12,6 @@ dotenv.config();
 
 import express from "express";
 import crypto from "crypto";
-import multer from "multer";
 import os from "os";
 import {
   IS_VERCEL,
@@ -26,35 +25,33 @@ import {
   uploadImage,
   deleteImage,
   getExtensionFromMime,
+  upload,
 } from "./storage.js";
 
 const PORT = parseInt(process.env.PORT ?? "3000", 10);
 
-// ── Multer — memory storage (works for both local + Vercel Blob) ──────────────
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only image files are allowed"));
+// Augment express request type
+declare global {
+  namespace Express {
+    interface Request {
+      tokenRecord?: StoredToken;
     }
-  },
-});
+  }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function validateShareToken(providedToken: string): Promise<StoredToken | null> {
   if (!providedToken) return null;
   const tokens = await loadTokens();
+  const providedTokenBuffer = Buffer.from(providedToken);
   for (const t of tokens) {
-    try {
-      if (crypto.timingSafeEqual(Buffer.from(t.shareToken), Buffer.from(providedToken))) {
-        return t;
-      }
-    } catch {
-      if (t.shareToken === providedToken) return t;
+    if (t.shareToken.length !== providedToken.length) {
+      continue;
+    }
+    const storedTokenBuffer = Buffer.from(t.shareToken);
+    if (crypto.timingSafeEqual(providedTokenBuffer, storedTokenBuffer)) {
+      return t;
     }
   }
   return null;
@@ -125,6 +122,25 @@ export function createApp() {
     next();
   };
 
+  // Auth middleware
+  const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const authHeader = req.headers.authorization;
+    let token = authHeader ? authHeader.replace("Bearer ", "").trim() : (req.query.token as string);
+    if(!token) {
+        const bodyToken = req.body.token as string;
+        if(bodyToken) token = bodyToken;
+    }
+
+    if (!token) {
+      const tokens = await loadTokens();
+      token = tokens[0]?.shareToken ?? "";
+    }
+    const tokenRecord = await validateShareToken(token);
+    if (!tokenRecord) return res.status(401).json({ error: "Unauthorized: Invalid or missing token" });
+    req.tokenRecord = tokenRecord;
+    next();
+  };
+
   // ─────────────────────────────────────────────────────────────────────────────
   // API Routes
   // ─────────────────────────────────────────────────────────────────────────────
@@ -156,9 +172,8 @@ export function createApp() {
         let imageType: string | null = null;
 
         if (file) {
-          const ext = getExtensionFromMime(file.mimetype);
-          const filename = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}${ext}`;
-          imageUrl = await uploadImage(file.buffer, filename, file.mimetype);
+          const source = IS_VERCEL ? file.buffer : file.path;
+          imageUrl = await uploadImage(source, file.filename, file.mimetype);
           imageType = file.mimetype;
         }
 
@@ -200,24 +215,15 @@ export function createApp() {
   );
 
   // Get Memories (polling)
-  app.get("/api/memories", async (req, res) => {
+  app.get("/api/memories", requireAuth, async (req, res) => {
     try {
-      const authHeader = req.headers.authorization;
-      let token = authHeader ? authHeader.replace("Bearer ", "").trim() : (req.query.token as string);
-      if (!token) {
-        const tokens = await loadTokens();
-        token = tokens[0]?.shareToken ?? "";
-      }
-      const tokenRecord = await validateShareToken(token);
-      if (!tokenRecord) return res.status(401).json({ error: "Unauthorized: Invalid or missing token" });
-
       const now = Date.now();
       const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
       const sinceParam = req.query.since ? new Date(req.query.since as string).getTime() : 0;
       const memories = await loadMemories();
 
       const userMemories = memories.filter(m => {
-        if (m.userId !== tokenRecord.userId) return false;
+        if (m.userId !== req.tokenRecord!.userId) return false;
         const createdMs = new Date(m.createdAt).getTime();
         const isUnexpired = (now - createdMs) <= TWENTY_FOUR_HOURS || m.isPinned;
         const isNewerThanSince = createdMs > sinceParam;
@@ -232,17 +238,8 @@ export function createApp() {
   });
 
   // Direct POST memory (Dashboard Quick Add / Paste)
-  app.post("/api/memories", upload.single("image"), async (req, res) => {
+  app.post("/api/memories", upload.single("image"), requireAuth, async (req, res) => {
     try {
-      const authHeader = req.headers.authorization;
-      let token = authHeader ? authHeader.replace("Bearer ", "").trim() : (req.body.token as string);
-      if (!token) {
-        const tokens = await loadTokens();
-        token = tokens[0]?.shareToken ?? "";
-      }
-      const tokenRecord = await validateShareToken(token);
-      if (!tokenRecord) return res.status(401).json({ error: "Unauthorized" });
-
       const { title, text, url, base64Image } = req.body;
       const file = req.file;
 
@@ -250,18 +247,17 @@ export function createApp() {
       let imageType: string | null = null;
 
       if (file) {
-        const ext = getExtensionFromMime(file.mimetype);
-        const filename = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}${ext}`;
-        imageUrl = await uploadImage(file.buffer, filename, file.mimetype);
+        const source = IS_VERCEL ? file.buffer : file.path;
+        imageUrl = await uploadImage(source, file.filename, file.mimetype);
         imageType = file.mimetype;
-      } else if (base64Image && base64Image.startsWith("data:image/")) {
+      } else if (base64Image && base64Image.startsWith("data:")) {
         try {
-          const matches = (base64Image as string).match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+          const matches = (base64Image as string).match(/^data:([a-zA-Z0-9+\/.\-_]+);base64,(.+)$/);
           if (matches) {
             imageType = matches[1];
             const buffer = Buffer.from(matches[2], "base64");
             const ext = getExtensionFromMime(imageType);
-            const filename = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}${ext}`;
+            const filename = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}-file${ext}`;
             imageUrl = await uploadImage(buffer, filename, imageType);
           }
         } catch (err) {
@@ -272,7 +268,7 @@ export function createApp() {
       const memoryTitle = title || (text ? text.slice(0, 40) + "..." : "Dashboard Snippet");
       const newMemory: StoredMemory = {
         id: crypto.randomUUID(),
-        userId: tokenRecord.userId,
+        userId: req.tokenRecord!.userId,
         title: String(memoryTitle).trim(),
         body: text ? String(text).trim() : null,
         link: (url || extractUrl(text)) ?? null,
@@ -294,11 +290,17 @@ export function createApp() {
   });
 
   // Toggle pin
-  app.patch("/api/memories/:id/pin", async (req, res) => {
+  app.patch("/api/memories/:id/pin", requireAuth, async (req, res) => {
     try {
       const memories = await loadMemories();
       const memory = memories.find(m => m.id === req.params.id);
       if (!memory) return res.status(404).json({ error: "Snippet not found" });
+      
+      // Basic authorization: can this user modify this snippet?
+      if (memory.userId !== req.tokenRecord!.userId) {
+          return res.status(403).json({ error: "Forbidden" });
+      }
+
       memory.isPinned = !memory.isPinned;
       await saveMemories(memories);
       res.json(memory);
@@ -308,11 +310,17 @@ export function createApp() {
   });
 
   // Delete memory
-  app.delete("/api/memories/:id", async (req, res) => {
+  app.delete("/api/memories/:id", requireAuth, async (req, res) => {
     try {
       const memories = await loadMemories();
       const idx = memories.findIndex(m => m.id === req.params.id);
       if (idx === -1) return res.status(404).json({ error: "Memory not found" });
+      
+      const memory = memories[idx];
+      if (memory.userId !== req.tokenRecord!.userId) {
+          return res.status(403).json({ error: "Forbidden" });
+      }
+
       const [deleted] = memories.splice(idx, 1);
       await saveMemories(memories);
       if (deleted.imageUrl) await deleteImage(deleted.imageUrl).catch(() => {});
@@ -363,16 +371,15 @@ export function createApp() {
   });
 
   // Rotate specific token
-  app.post("/api/tokens/rotate", async (req, res) => {
+  app.post("/api/tokens/rotate", requireAuth, async (req, res) => {
     try {
-      const authHeader = req.headers.authorization;
-      const currentToken = authHeader ? authHeader.replace("Bearer ", "").trim() : "";
+      const currentToken = req.tokenRecord!.shareToken;
 
       let tokens = await loadTokens();
       const existingIdx = tokens.findIndex(t => t.shareToken === currentToken);
 
       const newToken: StoredToken = {
-        userId: existingIdx !== -1 ? tokens[existingIdx].userId : "user_" + crypto.randomUUID().slice(0, 8),
+        userId: req.tokenRecord!.userId,
         shareToken: "cz-" + crypto.randomUUID().replace(/-/g, ""),
         createdAt: new Date().toISOString(),
       };
@@ -420,7 +427,7 @@ export function createApp() {
           title: "title",
           text: "text",
           url: "url",
-          files: [{ name: "image", accept: ["image/*"] }],
+          files: [{ name: "image", accept: ["*/*"] }],
         },
       },
     };
@@ -483,7 +490,7 @@ export function createApp() {
         cloudUrl,
         serverPort: PORT,
         addresses,
-        localhostUrl: `http://localhost:${PORT}/api/share-receiver/${shareToken}`,
+        localhostUrl: `http://localhost}:${PORT}/api/share-receiver/${shareToken}`,
       });
     } catch (err) {
       res.status(500).json({ error: "Internal server error" });
@@ -518,17 +525,8 @@ export function createApp() {
   });
 
   // AI Chat Assistant endpoint
-  app.post("/api/ai/chat", async (req, res) => {
+  app.post("/api/ai/chat", requireAuth, async (req, res) => {
     try {
-      const authHeader = req.headers.authorization;
-      let token = authHeader ? authHeader.replace("Bearer ", "").trim() : (req.body.token as string);
-      if (!token) {
-        const tokens = await loadTokens();
-        token = tokens[0]?.shareToken ?? "";
-      }
-      const tokenRecord = await validateShareToken(token);
-      if (!tokenRecord) return res.status(401).json({ error: "Unauthorized" });
-
       const { prompt, memoryIds } = req.body;
       if (!prompt) return res.status(400).json({ error: "Prompt is required" });
 
@@ -542,7 +540,7 @@ export function createApp() {
       // Load matching memories
       const allMemories = await loadMemories();
       const selectedMemories = allMemories.filter(
-        (m) => m.userId === tokenRecord.userId && memoryIds?.includes(m.id)
+        (m) => m.userId === req.tokenRecord!.userId && memoryIds?.includes(m.id)
       );
 
       // Construct Gemini request parts
@@ -550,10 +548,7 @@ export function createApp() {
       let contextText = "Selected Snippets context:\n";
 
       for (const m of selectedMemories) {
-        contextText += `---
-Snippet Title: ${m.title}
-Date Shared: ${m.createdAt}
-`;
+        contextText += `---\nSnippet Title: ${m.title}\nDate Shared: ${m.createdAt}\n`;
         if (m.body) contextText += `Content: ${m.body}\n`;
         if (m.link) contextText += `Link/URL: ${m.link}\n`;
 
@@ -584,10 +579,10 @@ Date Shared: ${m.createdAt}
                 mimeType: m.imageType || "image/jpeg",
               },
             });
-            contextText += `[An image was attached as context]\n`;
+            contextText += "[An image was attached as context]\n";
           } catch (err) {
             console.warn(`Failed to process image context for AI chat:`, err);
-            contextText += `[Image attachment failed to load]\n`;
+            contextText += "[Image attachment failed to load]\n";
           }
         }
         contextText += "\n";
@@ -629,4 +624,3 @@ Please respond in a direct, clear, and well-formatted markdown response.`;
 
   return app;
 }
-

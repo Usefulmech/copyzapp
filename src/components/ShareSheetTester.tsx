@@ -58,6 +58,9 @@ const PRESET_SHARES = [
   },
 ];
 
+const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
+const MAX_FILE_SIZE_LABEL = "25 MB";
+
 export const ShareSheetTester: React.FC<ShareSheetTesterProps> = ({
   isOpen,
   onClose,
@@ -87,12 +90,12 @@ export const ShareSheetTester: React.FC<ShareSheetTesterProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      if (file.size > 5 * 1024 * 1024) {
-        alert("Image must be less than 5MB");
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        alert(`File size exceeds the ${MAX_FILE_SIZE_LABEL} limit.`);
         return;
       }
       setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+      setPreviewUrl(file.type.startsWith("image/") ? URL.createObjectURL(file) : null);
     }
   };
 
@@ -252,12 +255,11 @@ export const ShareSheetTester: React.FC<ShareSheetTesterProps> = ({
             <div>
               <label className="text-xs font-mono font-medium text-gray-300 block mb-1 flex items-center gap-1.5">
                 <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Attach Image (Max 5MB)</span>
+                <span>Attach File (Max {MAX_FILE_SIZE_LABEL})</span>
               </label>
               <div className="flex items-center gap-3">
                 <input
                   type="file"
-                  accept="image/*"
                   onChange={handleFileChange}
                   className="hidden"
                   id="simulator-file-input"
@@ -266,7 +268,7 @@ export const ShareSheetTester: React.FC<ShareSheetTesterProps> = ({
                   htmlFor="simulator-file-input"
                   className="px-3.5 py-2 bg-[#212124] hover:bg-[#2A2A2C] text-xs font-mono font-medium text-gray-200 border border-[#2A2A2C] rounded-lg cursor-pointer transition-colors"
                 >
-                  {selectedFile ? "Change Image" : "Choose Image File"}
+                  {selectedFile ? "Change File" : "Choose File"}
                 </label>
                 {selectedFile && (
                   <span className="text-xs text-gray-300 font-mono truncate max-w-[200px]">

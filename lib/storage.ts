@@ -7,7 +7,7 @@
  *  - Vercel     → Vercel KV (Redis)   (requires KV_REST_API_URL + KV_REST_API_TOKEN)
  *                  Images              → Vercel Blob (requires BLOB_READ_WRITE_TOKEN)
  */
-
+import multer from "multer";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -180,48 +180,94 @@ export async function saveTokens(tokens: StoredToken[]): Promise<void> {
 
 // ── Image / File Upload ───────────────────────────────────────────────────────
 
+export const upload = multer({
+  storage: IS_VERCEL
+    ? multer.memoryStorage()
+    : multer.diskStorage({
+        destination: (req, file, cb) => {
+          ensureLocalDirs();
+          cb(null, UPLOADS_DIR);
+        },
+        filename: (req, file, cb) => {
+          const sanitized = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+          cb(null, `${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${sanitized}`);
+        },
+      }),
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
+  fileFilter: (_req, file, cb) => {
+    cb(null, true); // Allow any file type
+  },
+});
+
 export function getExtensionFromMime(mime: string): string {
   const map: Record<string, string> = {
     "image/png": ".png",
     "image/jpeg": ".jpg",
     "image/gif": ".gif",
     "image/webp": ".webp",
+    "application/pdf": ".pdf",
+    "text/plain": ".txt",
+    "application/zip": ".zip",
+    "audio/mpeg": ".mp3",
+    "video/mp4": ".mp4",
+    "application/json": ".json",
   };
-  return map[mime] ?? ".jpg";
+  if (map[mime]) return map[mime];
+
+  const parts = mime.split("/");
+  if (parts.length === 2) {
+    const sub = parts[1].split("+")[0].split("-");
+    const last = sub[sub.length - 1];
+    if (last && last.length <= 4) return `.${last}`;
+  }
+  return ".bin";
 }
 
 /**
- * Upload an image buffer and return the URL where it can be accessed.
+ * Upload an image and return the URL where it can be accessed.
  * - Vercel: returns a Vercel Blob CDN URL
- * - Local:  saves to disk, returns /uploads/<filename>
+ * - Local:  returns /uploads/<filename>
  */
 export async function uploadImage(
-  buffer: Buffer,
+  source: Buffer | string, // Buffer for Vercel, file path for local
   filename: string,
   mimetype: string
 ): Promise<string> {
+  const safeFilename = path.basename(filename).replace(/[^a-zA-Z0-9.\-_]/g, "_") || "upload.bin";
+
   if (IS_VERCEL) {
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
       console.warn("Vercel Blob token (BLOB_READ_WRITE_TOKEN) is missing. Falling back to base64 Data URL.");
+      const buffer = source instanceof Buffer ? source : await fs.promises.readFile(source);
       const base64 = buffer.toString("base64");
       return `data:${mimetype};base64,${base64}`;
     }
     try {
       const { put } = await import("@vercel/blob");
-      const blob = await put(`copyzap-uploads/${filename}`, buffer, {
+      const body = source instanceof Buffer ? source : fs.createReadStream(source);
+      const blob = await put(`copyzap-uploads/${safeFilename}`, body, {
         access: "public",
         contentType: mimetype,
       });
       return blob.url;
     } catch (err) {
       console.warn("Failed to upload image to Vercel Blob, falling back to base64 Data URL:", err);
+      const buffer = source instanceof Buffer ? source : await fs.promises.readFile(source);
       const base64 = buffer.toString("base64");
       return `data:${mimetype};base64,${base64}`;
     }
   }
+
+  // Local dev: source is a file path
+  if (typeof source === "string") {
+    // The file is already at its final destination thanks to multer.diskStorage.
+    // We just need to return the web-accessible URL.
+    return `/uploads/${path.basename(source)}`;
+  }
+  // Fallback for local if we get a buffer somehow (e.g. base64 upload)
   ensureLocalDirs();
-  fs.writeFileSync(path.join(UPLOADS_DIR, filename), buffer);
-  return `/uploads/${filename}`;
+  fs.writeFileSync(path.join(UPLOADS_DIR, safeFilename), source);
+  return `/uploads/${safeFilename}`;
 }
 
 /**
