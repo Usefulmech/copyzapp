@@ -62,7 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 bg-[#0B0B0C]/95 backdrop-blur-xl border-b border-[#1A1A1C]">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3">
+      <div className="max-w-none mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3">
 
         {/* Brand & Logo */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -81,7 +81,7 @@ export const Header: React.FC<HeaderProps> = ({
               />
             </div>
             <p className="text-[10px] sm:text-[11px] text-gray-500 font-mono hidden sm:block">
-              Share it. Zap it. • 24h Auto-Expiry
+              Share it. Zapp it. • 24h Auto-Expiry
             </p>
           </div>
         </div>

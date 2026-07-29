@@ -7,6 +7,9 @@
  * On Vercel, api/[...path].ts is used instead.
  */
 
+import dotenv from "dotenv";
+dotenv.config();
+
 import { createServer as createViteServer } from "vite";
 import os from "os";
 import { createApp, performCleanup } from "./lib/app.js";

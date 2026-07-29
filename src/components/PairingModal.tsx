@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import QRCode from "qrcode";
 import { UserTokenInfo, NetworkInfo, ConnectionMode } from "../types";
 import { copyToClipboard } from "../utils/clipboard";
@@ -20,6 +20,7 @@ import {
   Server,
   Globe,
   ChevronDown,
+  Camera,
 } from "lucide-react";
 
 interface PairingModalProps {
@@ -28,6 +29,7 @@ interface PairingModalProps {
   tokenInfo: UserTokenInfo | null;
   networkInfo: NetworkInfo | null;
   onRotateToken: () => void;
+  onPair: (token: string) => void;
 }
 
 const CONNECTION_MODES: {
@@ -73,15 +75,22 @@ export const PairingModal: React.FC<PairingModalProps> = ({
   tokenInfo,
   networkInfo,
   onRotateToken,
+  onPair,
 }) => {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
   const [copiedUrl, setCopiedUrl] = useState<boolean>(false);
   const [copiedToken, setCopiedToken] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<"qr" | "android" | "windows" | "ios">("qr");
+  const [activeTab, setActiveTab] = useState<"qr" | "scan">("qr");
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>("wifi");
   const [isQrLoading, setIsQrLoading] = useState(false);
 
-  // Resolve active share URL based on connection mode + networkInfo
+  // QR Camera Scanner state
+  const [isScanning, setIsScanning] = useState<boolean>(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // Resolve active share URL based on connection mode + networkInfo (for POST target endpoints)
   const activeShareUrl = (() => {
     if (!tokenInfo) return "";
     if (connectionMode === "cloud") {
@@ -103,6 +112,32 @@ export const PairingModal: React.FC<PairingModalProps> = ({
       return hotspotAddr?.shareUrl || tokenInfo.shareUrl;
     }
     return tokenInfo.shareUrl;
+  })();
+
+  // Resolve active pairing URL based on connection mode + networkInfo (for scanner scan target / browser landing pages)
+  const activePairingUrl = (() => {
+    if (!tokenInfo) return "";
+    const token = tokenInfo.shareToken;
+    if (connectionMode === "cloud") {
+      const host = networkInfo?.cloudUrl || window.location.origin;
+      return `${host}/?token=${token}`;
+    }
+    if (connectionMode === "localhost") {
+      return `http://localhost:${networkInfo?.serverPort || 3000}/?token=${token}`;
+    }
+    if (connectionMode === "wifi") {
+      const wifiAddr = networkInfo?.addresses.find((a) => a.type === "wifi");
+      if (wifiAddr) {
+        return `http://${wifiAddr.ip}:${networkInfo?.serverPort || 3000}/?token=${token}`;
+      }
+    }
+    if (connectionMode === "hotspot") {
+      const hotspotAddr = networkInfo?.addresses.find((a) => a.type === "hotspot");
+      if (hotspotAddr) {
+        return `http://${hotspotAddr.ip}:${networkInfo?.serverPort || 3000}/?token=${token}`;
+      }
+    }
+    return `${window.location.origin}/?token=${token}`;
   })();
 
   // Check if a connection mode is available
@@ -129,11 +164,11 @@ export const PairingModal: React.FC<PairingModalProps> = ({
     }
   }, [isOpen, networkInfo]);
 
-  // Generate QR whenever URL changes
+  // Generate QR whenever pairing URL changes
   useEffect(() => {
-    if (!activeShareUrl) return;
+    if (!activePairingUrl) return;
     setIsQrLoading(true);
-    QRCode.toDataURL(activeShareUrl, {
+    QRCode.toDataURL(activePairingUrl, {
       width: 280,
       margin: 2,
       color: { dark: "#0f172a", light: "#ffffff" },
@@ -147,9 +182,122 @@ export const PairingModal: React.FC<PairingModalProps> = ({
         console.error("QR Code Error:", err);
         setIsQrLoading(false);
       });
-  }, [activeShareUrl]);
+  }, [activePairingUrl]);
+
+  // Cleanup scanner on unmount, modal close or tab switch
+  useEffect(() => {
+    if (!isOpen) {
+      stopScanning();
+    }
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [isOpen]);
 
   if (!isOpen || !tokenInfo) return null;
+
+  async function startScanning() {
+    setScanError(null);
+    setIsScanning(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute("playsinline", "true");
+        videoRef.current.play();
+      }
+
+      if ("BarcodeDetector" in window) {
+        const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
+
+        const detectFrame = async () => {
+          if (!streamRef.current || !videoRef.current) return;
+          try {
+            const barcodes = await detector.detect(videoRef.current);
+            if (barcodes.length > 0) {
+              const qrValue = barcodes[0].rawValue;
+              handleScannedValue(qrValue);
+            } else {
+              requestAnimationFrame(detectFrame);
+            }
+          } catch (err) {
+            requestAnimationFrame(detectFrame);
+          }
+        };
+
+        requestAnimationFrame(detectFrame);
+      } else {
+        setScanError(
+          "In-browser QR scanning is not supported by your browser. Please use your phone's native camera app to scan the code."
+        );
+      }
+    } catch (err: any) {
+      console.error("Camera access error:", err);
+      setScanError("Camera access denied or unavailable. Make sure to grant camera permissions.");
+    }
+  }
+
+  function stopScanning() {
+    setIsScanning(false);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }
+
+  function handleScannedValue(value: string) {
+    let token = "";
+    if (value.startsWith("cz-")) {
+      token = value;
+    } else {
+      try {
+        const url = new URL(value);
+        token = url.searchParams.get("token") || "";
+        if (!token) {
+          const parts = url.pathname.split("/");
+          const lastPart = parts[parts.length - 1];
+          if (lastPart && lastPart.startsWith("cz-")) {
+            token = lastPart;
+          }
+        }
+      } catch {
+        const match = value.match(/cz-[a-f0-9]+/);
+        if (match) token = match[0];
+      }
+    }
+
+    if (token) {
+      onPair(token);
+      stopScanning();
+    } else {
+      if ("BarcodeDetector" in window) {
+        requestAnimationFrame(detectFrameFallback);
+      }
+    }
+  }
+
+  async function detectFrameFallback() {
+    if (!streamRef.current || !videoRef.current) return;
+    try {
+      const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
+      const barcodes = await detector.detect(videoRef.current);
+      if (barcodes.length > 0) {
+        handleScannedValue(barcodes[0].rawValue);
+      } else {
+        requestAnimationFrame(detectFrameFallback);
+      }
+    } catch {
+      requestAnimationFrame(detectFrameFallback);
+    }
+  }
 
   const handleCopyUrl = async () => {
     try {
@@ -167,17 +315,21 @@ export const PairingModal: React.FC<PairingModalProps> = ({
     } catch {}
   };
 
-  // Helper label for current mode
+  const handleTabChange = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    stopScanning();
+  };
+
   const activeModeInfo = CONNECTION_MODES.find((m) => m.mode === connectionMode);
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
-      {/* Bottom-sheet on mobile, centered modal on desktop */}
       <div className="bottom-sheet sm:rounded-xl relative w-full sm:max-w-2xl bg-[#161618] border border-[#2A2A2C] sm:border shadow-2xl flex flex-col h-[90vh] sm:h-auto max-h-[92vh] sm:max-h-[88vh] overflow-hidden">
-
         {/* Drag Handle (mobile only) */}
         <div className="sm:hidden flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-[#3A3A3C]" />
@@ -195,7 +347,10 @@ export const PairingModal: React.FC<PairingModalProps> = ({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => {
+              onClose();
+              stopScanning();
+            }}
             className="p-2 text-gray-400 hover:text-gray-200 hover:bg-[#212124] rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
@@ -203,19 +358,20 @@ export const PairingModal: React.FC<PairingModalProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex border-b border-[#2A2A2C] bg-[#0E0E10] px-5 gap-2 overflow-x-auto custom-scrollbar">
-          {(["qr", "android", "windows", "ios"] as const).map((tab) => {
+        <div className="flex border-b border-[#2A2A2C] bg-[#0E0E10] px-5 gap-2 overflow-x-auto no-scrollbar">
+          {(["qr", "scan"] as const).map((tab) => {
             const icons = {
               qr: <QrCode className="w-4 h-4" />,
-              android: <Smartphone className="w-4 h-4" />,
-              windows: <Laptop className="w-4 h-4" />,
-              ios: <Share2 className="w-4 h-4" />,
+              scan: <Camera className="w-4 h-4" />,
             };
-            const labels = { qr: "Scan QR", android: "Android", windows: "Windows PWA", ios: "iOS" };
+            const labels = {
+              qr: "Scan QR",
+              scan: "Camera Scanner",
+            };
             return (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => handleTabChange(tab)}
                 className={`py-4.5 px-4.5 text-[13px] font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap shrink-0 min-h-[52px] ${
                   activeTab === tab
                     ? "border-emerald-500 text-emerald-400"
@@ -231,7 +387,6 @@ export const PairingModal: React.FC<PairingModalProps> = ({
 
         {/* Modal Content */}
         <div className="p-5 sm:p-7 overflow-y-auto flex-1 space-y-6 sm:space-y-7 custom-scrollbar">
-
           {/* ── QR TAB ─────────────────────────────────────────────────────── */}
           {activeTab === "qr" && (
             <div className="space-y-6 sm:space-y-8">
@@ -267,13 +422,12 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                   })}
                 </div>
 
-                {/* Mode context hint */}
                 {activeModeInfo && (
                   <p className="text-xs text-gray-400 font-mono leading-relaxed flex items-center gap-2 pt-1">
                     <Info className="w-4 h-4 text-gray-400 shrink-0" />
                     {connectionMode === "wifi" && "Ensure phone & PC are on the same WiFi network (same router)."}
                     {connectionMode === "hotspot" && "Enable Windows Mobile Hotspot first, then connect your phone to it before scanning."}
-                    {connectionMode === "cloud" && "Works over internet — phone can be anywhere. Requires APP_URL env to be configured."}
+                    {connectionMode === "cloud" && "Works over internet — phone can be anywhere."}
                     {connectionMode === "localhost" && "For same device / emulator testing only."}
                   </p>
                 )}
@@ -282,26 +436,25 @@ export const PairingModal: React.FC<PairingModalProps> = ({
               {/* QR + Info side by side on desktop */}
               <div className="flex flex-col sm:flex-row gap-7 items-center sm:items-start">
                 {/* QR Code */}
-                <div className="flex flex-col items-center justify-center p-6 sm:p-7 bg-white rounded-2xl shadow-lg border border-gray-200 shrink-0">
+                <div className="flex flex-col items-center justify-center p-4 sm:p-7 bg-white rounded-2xl shadow-lg border border-gray-200 shrink-0">
                   {isQrLoading ? (
-                    <div className="w-52 h-52 flex items-center justify-center">
+                    <div className="w-44 h-44 sm:w-52 sm:h-52 flex items-center justify-center">
                       <RefreshCw className="w-7 h-7 text-gray-400 animate-spin" />
                     </div>
                   ) : qrCodeDataUrl ? (
                     <img
                       src={qrCodeDataUrl}
                       alt="CopyZapp Phone Pairing QR Code"
-                      className="w-52 h-52 object-contain"
+                      className="w-44 h-44 sm:w-52 sm:h-52 object-contain"
                     />
                   ) : (
-                    <div className="w-52 h-52 flex items-center justify-center text-gray-400 font-mono text-sm">
-                      Generating…
+                    <div className="w-44 h-44 sm:w-52 sm:h-52 flex items-center justify-center text-gray-400 font-mono text-sm">
+                      Generating...
                     </div>
                   )}
                   <span className="text-xs font-bold text-gray-600 mt-4 text-center">
                     Scan with Android Camera / Chrome
                   </span>
-                  {/* Mode badge on QR */}
                   <span className={`mt-2.5 text-xs font-black uppercase tracking-wider ${activeModeInfo?.color || "text-gray-400"}`}>
                     {activeModeInfo?.label} Mode
                   </span>
@@ -346,7 +499,6 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Rotate token */}
                   <div className="pt-2">
                     <button
                       onClick={onRotateToken}
@@ -407,120 +559,55 @@ export const PairingModal: React.FC<PairingModalProps> = ({
             </div>
           )}
 
-          {/* ── ANDROID TAB ────────────────────────────────────────────────── */}
-          {activeTab === "android" && (
-            <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-200 text-xs flex items-start gap-3">
-                <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <div>
-                  <strong className="font-semibold block text-emerald-300 mb-1">Native Android Share Sheet</strong>
-                  CopyZapp registers as an official OS Share Target via Web App Manifest. Once added to your phone home screen, it appears in the Android share sheet from Chrome, Twitter, Photos, YouTube, and more!
+          {/* ── CAMERA SCANNER TAB ────────────────────────────────────────── */}
+          {activeTab === "scan" && (
+            <div className="space-y-6">
+              {!isScanning ? (
+                <div className="flex flex-col items-center justify-center p-8 bg-[#0E0E10] border border-[#2A2A2C] rounded-xl space-y-4 text-center">
+                  <Camera className="w-12 h-12 text-gray-500" />
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-200">Scan PC Dashboard QR</h3>
+                    <p className="text-xs text-gray-400 font-mono mt-1 max-w-sm">
+                      Use your phone's browser camera to scan the QR code displayed on your PC screen and instantly pair the devices.
+                    </p>
+                  </div>
+                  <button
+                    onClick={startScanning}
+                    className="px-5 py-2 text-xs font-mono font-semibold bg-emerald-500 text-black hover:bg-emerald-400 rounded-lg transition-colors"
+                  >
+                    Start Scanner
+                  </button>
                 </div>
-              </div>
-
-              <ol className="space-y-4">
-                {[
-                  {
-                    step: 1,
-                    title: "Open in Android Chrome",
-                    desc: `Navigate to the server's IP in Chrome on your phone. Use the QR code above (${connectionMode} mode: ${activeShareUrl.replace(/\/api\/.*/, "")}).`,
-                  },
-                  {
-                    step: 2,
-                    title: 'Tap Chrome Menu (⋮) → "Add to Home Screen"',
-                    desc: "This installs CopyZapp as a PWA with the Web Share Target manifest registered.",
-                  },
-                  {
-                    step: 3,
-                    title: "Share anything to CopyZapp",
-                    desc: 'Tap share in any Android app → Select CopyZapp. The content appears on your PC dashboard in < 2 seconds!',
-                  },
-                ].map(({ step, title, desc }) => (
-                  <li key={step} className="flex items-start gap-4 p-4 rounded-lg bg-[#0E0E10] border border-[#2A2A2C] transition-all hover:border-[#3A3A3C]">
-                    <span className="w-7 h-7 rounded bg-emerald-500/20 text-emerald-400 font-mono font-bold text-sm flex items-center justify-center shrink-0 mt-0.5">
-                      {step}
-                    </span>
-                    <div>
-                      <span className="text-sm font-semibold text-[#E0E0E1]">{title}</span>
-                      <p className="text-xs text-gray-400 font-mono mt-1 leading-relaxed">{desc}</p>
+              ) : (
+                <div className="flex flex-col items-center justify-center space-y-4">
+                  <div className="relative w-full max-w-md aspect-square bg-black border border-[#2A2A2C] rounded-xl overflow-hidden shadow-inner">
+                    <video
+                      ref={videoRef}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 pointer-events-none border-[32px] border-black/50 flex items-center justify-center">
+                      <div className="w-48 h-48 border-2 border-emerald-500 rounded-lg animate-pulse" />
                     </div>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
-
-          {/* ── WINDOWS TAB ────────────────────────────────────────────────── */}
-          {activeTab === "windows" && (
-            <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-[#0E0E10] border border-[#2A2A2C] space-y-3">
-                <h3 className="text-sm font-semibold text-[#E0E0E1] flex items-center gap-2">
-                  <Laptop className="w-4 h-4 text-emerald-400" />
-                  Install Windows PWA Dashboard
-                </h3>
-                <p className="text-xs text-gray-400 font-mono">
-                  Enjoy an app-like chromeless window on Windows 11/10 with native clipboard access and live polling.
-                </p>
-                <div className="space-y-2 text-xs font-mono text-gray-300">
-                  {[
-                    'In Edge or Chrome, click the App Install icon in the address bar, or go to Menu → Apps → "Install CopyZapp".',
-                    "Pin CopyZapp to your Windows Taskbar or Start Menu.",
-                    "Keep it running in the background — new snippets appear within 4 seconds of sharing from your phone!",
-                  ].map((step, i) => (
-                    <div key={i} className="flex items-start gap-2.5">
-                      <span className="text-emerald-400 font-bold shrink-0">{i + 1}.</span>
-                      <span>{step}</span>
-                    </div>
-                  ))}
+                    {scanError && (
+                      <div className="absolute inset-0 bg-black/90 p-6 flex flex-col items-center justify-center text-center space-y-3">
+                        <p className="text-xs font-mono text-rose-400 leading-relaxed">{scanError}</p>
+                        <button
+                          onClick={startScanning}
+                          className="px-3.5 py-1.5 text-xs font-mono font-semibold bg-[#212124] text-gray-300 hover:bg-[#2A2A2C] border border-[#2A2A2C] rounded-lg transition-colors"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={stopScanning}
+                    className="px-5 py-2 text-xs font-mono font-semibold bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/30 rounded-lg transition-colors"
+                  >
+                    Stop Scanner
+                  </button>
                 </div>
-              </div>
-
-              {/* Cloud deployment instructions */}
-              <div className="p-4 rounded-lg bg-indigo-500/5 border border-indigo-500/20 space-y-2.5">
-                <h4 className="text-xs font-semibold text-indigo-300 flex items-center gap-2">
-                  <Cloud className="w-3.5 h-3.5" /> Full Cloud Deployment (Access from Anywhere)
-                </h4>
-                <div className="space-y-1.5 text-[11px] font-mono text-gray-400">
-                  <p>To make CopyZapp accessible over the internet (not just local network):</p>
-                  <ol className="list-decimal list-inside space-y-1.5 pl-1">
-                    <li>Deploy to a cloud host (e.g. <span className="text-indigo-300">Railway, Fly.io, Render, or Google Cloud Run</span>).</li>
-                    <li>Set the <code className="text-indigo-300">APP_URL</code> environment variable to your deployment URL (e.g. <code className="text-indigo-300">https://copyzapp.yourapp.com</code>).</li>
-                    <li>The Cloud mode QR in the Pair tab will automatically use this URL.</li>
-                    <li>Phone can now share from anywhere — WiFi, mobile data, etc.</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── IOS TAB ────────────────────────────────────────────────────── */}
-          {activeTab === "ios" && (
-            <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-200 text-xs flex items-start gap-3">
-                <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-                <div>
-                  <strong className="font-semibold block text-indigo-300 mb-1">iOS Shortcuts Bridge</strong>
-                  Apple Safari restricts Web Share Target in PWAs. On iPhone/iPad, use Apple Shortcuts to POST directly to your CopyZapp share target URL.
-                </div>
-              </div>
-
-              <div className="p-4.5 rounded-lg bg-[#0E0E10] border border-[#2A2A2C] space-y-4">
-                <p className="text-xs font-semibold text-gray-200 font-mono">Creating an iOS Share Shortcut:</p>
-                <ol className="space-y-3 text-xs text-gray-400 font-mono">
-                  {[
-                    "Open Apple Shortcuts app → Create New Shortcut.",
-                    'Set input to "Receive Shares (Text, URLs, Images)" in Share Sheet.',
-                    `Add action: "Get Contents of URL" with POST method to:\n${activeShareUrl}`,
-                    "Add form fields: title, text, url.",
-                    'Name shortcut "CopyZapp" and save to Share Sheet!',
-                  ].map((step, i) => (
-                    <li key={i} className="flex items-start gap-3">
-                      <span className="text-indigo-400 font-bold shrink-0 text-sm">{i + 1}.</span>
-                      <span className="whitespace-pre-wrap leading-relaxed">{step}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
+              )}
             </div>
           )}
         </div>
@@ -528,7 +615,10 @@ export const PairingModal: React.FC<PairingModalProps> = ({
         {/* Modal Footer */}
         <div className="p-4 border-t border-[#2A2A2C] flex justify-end pb-safe">
           <button
-            onClick={onClose}
+            onClick={() => {
+              onClose();
+              stopScanning();
+            }}
             className="px-5 py-2 text-xs font-mono font-semibold bg-[#212124] text-gray-200 hover:bg-[#2A2A2C] rounded-lg transition-colors border border-[#2A2A2C]"
           >
             Done

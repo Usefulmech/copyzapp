@@ -47,12 +47,25 @@ function ensureLocalDirs() {
   if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
+// In-memory fallback stores for Vercel when environment variables are missing/invalid
+let inMemoryMemories: StoredMemory[] = [];
+let inMemoryTokens: StoredToken[] = [];
+
 // ── Memories ──────────────────────────────────────────────────────────────────
 
 export async function loadMemories(): Promise<StoredMemory[]> {
   if (IS_VERCEL) {
-    const { kv } = await import("@vercel/kv");
-    return (await kv.get<StoredMemory[]>("copyzap:memories")) ?? [];
+    if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+      console.warn("Vercel KV environment variables (KV_REST_API_URL / KV_REST_API_TOKEN) are missing. Falling back to in-memory storage.");
+      return inMemoryMemories;
+    }
+    try {
+      const { kv } = await import("@vercel/kv");
+      return (await kv.get<StoredMemory[]>("copyzap:memories")) ?? [];
+    } catch (err) {
+      console.warn("Failed to load memories from Vercel KV, falling back to in-memory storage:", err);
+      return inMemoryMemories;
+    }
   }
   try {
     if (fs.existsSync(MEMORIES_FILE)) {
@@ -66,8 +79,17 @@ export async function loadMemories(): Promise<StoredMemory[]> {
 
 export async function saveMemories(memories: StoredMemory[]): Promise<void> {
   if (IS_VERCEL) {
-    const { kv } = await import("@vercel/kv");
-    await kv.set("copyzap:memories", memories);
+    if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+      inMemoryMemories = memories;
+      return;
+    }
+    try {
+      const { kv } = await import("@vercel/kv");
+      await kv.set("copyzap:memories", memories);
+    } catch (err) {
+      console.warn("Failed to save memories to Vercel KV, saving to in-memory fallback:", err);
+      inMemoryMemories = memories;
+    }
     return;
   }
   try {
@@ -90,14 +112,29 @@ function createFreshToken(): StoredToken {
 
 export async function loadTokens(): Promise<StoredToken[]> {
   if (IS_VERCEL) {
-    const { kv } = await import("@vercel/kv");
-    const tokens = await kv.get<StoredToken[]>("copyzap:tokens");
-    if (!tokens || tokens.length === 0) {
-      const fresh = createFreshToken();
-      await kv.set("copyzap:tokens", [fresh]);
-      return [fresh];
+    if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+      console.warn("Vercel KV environment variables (KV_REST_API_URL / KV_REST_API_TOKEN) are missing. Falling back to in-memory storage.");
+      if (inMemoryTokens.length === 0) {
+        inMemoryTokens = [createFreshToken()];
+      }
+      return inMemoryTokens;
     }
-    return tokens;
+    try {
+      const { kv } = await import("@vercel/kv");
+      const tokens = await kv.get<StoredToken[]>("copyzap:tokens");
+      if (!tokens || tokens.length === 0) {
+        const fresh = createFreshToken();
+        await kv.set("copyzap:tokens", [fresh]);
+        return [fresh];
+      }
+      return tokens;
+    } catch (err) {
+      console.warn("Failed to load tokens from Vercel KV, falling back to in-memory storage:", err);
+      if (inMemoryTokens.length === 0) {
+        inMemoryTokens = [createFreshToken()];
+      }
+      return inMemoryTokens;
+    }
   }
   // Local
   try {
@@ -120,8 +157,17 @@ export async function loadTokens(): Promise<StoredToken[]> {
 
 export async function saveTokens(tokens: StoredToken[]): Promise<void> {
   if (IS_VERCEL) {
-    const { kv } = await import("@vercel/kv");
-    await kv.set("copyzap:tokens", tokens);
+    if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+      inMemoryTokens = tokens;
+      return;
+    }
+    try {
+      const { kv } = await import("@vercel/kv");
+      await kv.set("copyzap:tokens", tokens);
+    } catch (err) {
+      console.warn("Failed to save tokens to Vercel KV, saving to in-memory fallback:", err);
+      inMemoryTokens = tokens;
+    }
     return;
   }
   try {
@@ -155,12 +201,23 @@ export async function uploadImage(
   mimetype: string
 ): Promise<string> {
   if (IS_VERCEL) {
-    const { put } = await import("@vercel/blob");
-    const blob = await put(`copyzap-uploads/${filename}`, buffer, {
-      access: "public",
-      contentType: mimetype,
-    });
-    return blob.url;
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      console.warn("Vercel Blob token (BLOB_READ_WRITE_TOKEN) is missing. Falling back to base64 Data URL.");
+      const base64 = buffer.toString("base64");
+      return `data:${mimetype};base64,${base64}`;
+    }
+    try {
+      const { put } = await import("@vercel/blob");
+      const blob = await put(`copyzap-uploads/${filename}`, buffer, {
+        access: "public",
+        contentType: mimetype,
+      });
+      return blob.url;
+    } catch (err) {
+      console.warn("Failed to upload image to Vercel Blob, falling back to base64 Data URL:", err);
+      const base64 = buffer.toString("base64");
+      return `data:${mimetype};base64,${base64}`;
+    }
   }
   ensureLocalDirs();
   fs.writeFileSync(path.join(UPLOADS_DIR, filename), buffer);
@@ -174,6 +231,12 @@ export async function uploadImage(
  */
 export async function deleteImage(imageUrl: string): Promise<void> {
   if (IS_VERCEL) {
+    if (imageUrl.startsWith("data:")) {
+      return; // Base64 data URL has no remote resource to delete
+    }
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      return;
+    }
     try {
       const { del } = await import("@vercel/blob");
       await del(imageUrl);

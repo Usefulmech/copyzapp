@@ -115,12 +115,12 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
       {/* Backdrop close capture */}
       <div className="absolute inset-0 -z-10" onClick={onClose} />
 
-      {/* Drawer Panel */}
-      <div className="w-full sm:max-w-md md:max-w-lg bg-[#161618] border-l border-[#2A2A2C] h-full flex flex-col shadow-2xl relative animate-slide-left">
+      {/* Centered Modal Panel */}
+      <div className="w-full max-w-2xl bg-[#161618] border border-[#2A2A2C] rounded-xl h-[80vh] max-h-[85vh] flex flex-col shadow-2xl relative transition-all">
         
         {/* Header */}
         <div className="flex items-center justify-between p-4.5 border-b border-[#2A2A2C] bg-[#161618] shrink-0">
@@ -159,7 +159,7 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
 
           {contextSnippets.length === 0 ? (
             <p className="text-[11px] text-gray-500 font-mono italic">
-              No snippets selected. Tap the Sparkles icon (✨) on any snippet card to load it into AI context.
+              No snippets selected. Tap the Sparkles icon on any snippet card to load it into AI context.
             </p>
           ) : (
             <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto custom-scrollbar pr-1 py-0.5">
@@ -230,7 +230,7 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
           {loading && (
             <div className="flex items-center gap-2 text-indigo-400 text-xs font-mono py-1 px-1">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>Gemini is generating response...</span>
+              <span>Zapping it in a moment...</span>
             </div>
           )}
           <div ref={chatEndRef} />

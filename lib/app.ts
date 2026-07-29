@@ -7,6 +7,9 @@
  *   - api/[...path].ts (Vercel: exports as serverless handler)
  */
 
+import dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import crypto from "crypto";
 import multer from "multer";
@@ -319,42 +322,68 @@ export function createApp() {
     }
   });
 
-  // Get active token
-  app.get("/api/tokens/active", async (_req, res) => {
+  // Get active token (supports client-specific tokens for multi-tenancy)
+  app.get("/api/tokens/active", async (req, res) => {
     try {
+      const clientToken = req.query.token as string;
       let tokens = await loadTokens();
-      if (tokens.length === 0) {
-        const newToken: StoredToken = {
-          userId: "user_" + crypto.randomUUID().slice(0, 8),
-          shareToken: "cz-" + crypto.randomUUID().replace(/-/g, ""),
-          createdAt: new Date().toISOString(),
-        };
-        tokens = [newToken];
-        await saveTokens(tokens);
+
+      if (clientToken) {
+        const existing = tokens.find(t => t.shareToken === clientToken);
+        if (existing) {
+          const host = process.env.APP_URL ?? `http://localhost:${PORT}`;
+          return res.json({
+            userId: existing.userId,
+            shareToken: existing.shareToken,
+            shareUrl: `${host}/api/share-receiver/${existing.shareToken}`,
+            manifestUrl: `${host}/api/manifest/${existing.shareToken}`,
+          });
+        }
       }
-      const activeToken = tokens[0];
+
+      // If no valid client token was provided, generate a new isolated token!
+      const newToken: StoredToken = {
+        userId: "user_" + crypto.randomUUID().slice(0, 8),
+        shareToken: "cz-" + crypto.randomUUID().replace(/-/g, ""),
+        createdAt: new Date().toISOString(),
+      };
+      tokens.push(newToken);
+      await saveTokens(tokens);
+
       const host = process.env.APP_URL ?? `http://localhost:${PORT}`;
       res.json({
-        userId: activeToken.userId,
-        shareToken: activeToken.shareToken,
-        shareUrl: `${host}/api/share-receiver/${activeToken.shareToken}`,
-        manifestUrl: `${host}/api/manifest/${activeToken.shareToken}`,
+        userId: newToken.userId,
+        shareToken: newToken.shareToken,
+        shareUrl: `${host}/api/share-receiver/${newToken.shareToken}`,
+        manifestUrl: `${host}/api/manifest/${newToken.shareToken}`,
       });
     } catch (err) {
       res.status(500).json({ error: "Internal server error" });
     }
   });
 
-  // Rotate token
-  app.post("/api/tokens/rotate", async (_req, res) => {
+  // Rotate specific token
+  app.post("/api/tokens/rotate", async (req, res) => {
     try {
-      const tokens = await loadTokens();
+      const authHeader = req.headers.authorization;
+      const currentToken = authHeader ? authHeader.replace("Bearer ", "").trim() : "";
+
+      let tokens = await loadTokens();
+      const existingIdx = tokens.findIndex(t => t.shareToken === currentToken);
+
       const newToken: StoredToken = {
-        userId: tokens[0]?.userId ?? "user_" + crypto.randomUUID().slice(0, 8),
+        userId: existingIdx !== -1 ? tokens[existingIdx].userId : "user_" + crypto.randomUUID().slice(0, 8),
         shareToken: "cz-" + crypto.randomUUID().replace(/-/g, ""),
         createdAt: new Date().toISOString(),
       };
-      await saveTokens([newToken]);
+
+      if (existingIdx !== -1) {
+        tokens[existingIdx] = newToken;
+      } else {
+        tokens.push(newToken);
+      }
+      await saveTokens(tokens);
+
       const host = process.env.APP_URL ?? `http://localhost:${PORT}`;
       res.json({
         userId: newToken.userId,
@@ -517,7 +546,7 @@ export function createApp() {
       );
 
       // Construct Gemini request parts
-      const contents: any[] = [];
+      const parts: any[] = [];
       let contextText = "Selected Snippets context:\n";
 
       for (const m of selectedMemories) {
@@ -537,12 +566,19 @@ Date Shared: ${m.createdAt}
               const { default: path } = await import("path");
               const filename = path.basename(m.imageUrl);
               buffer = fs.readFileSync(path.join(UPLOADS_DIR, filename));
+            } else if (m.imageUrl.startsWith("data:")) {
+              const matches = m.imageUrl.match(/^data:image\/[a-zA-Z+]+;base64,(.+)$/);
+              if (matches) {
+                buffer = Buffer.from(matches[1], "base64");
+              } else {
+                throw new Error("Invalid base64 image data URL");
+              }
             } else {
               const fetchRes = await fetch(m.imageUrl);
               buffer = Buffer.from(await fetchRes.arrayBuffer());
             }
 
-            contents.push({
+            parts.push({
               inlineData: {
                 data: buffer.toString("base64"),
                 mimeType: m.imageType || "image/jpeg",
@@ -558,7 +594,7 @@ Date Shared: ${m.createdAt}
       }
 
       // Add final prompt text
-      const finalPrompt = `You are CopyZap AI, a premium built-in assistant for CopyZap.
+      const finalPrompt = `You are CopyZapp AI, a premium built-in assistant for CopyZapp.
 Analyze the context snippets provided below and answer the User's Question.
 
 ${contextText}
@@ -568,20 +604,26 @@ User's Question:
 
 Please respond in a direct, clear, and well-formatted markdown response.`;
 
-      contents.push(finalPrompt);
+      parts.push({ text: finalPrompt });
 
       // Call Google Gen AI SDK
       const { GoogleGenAI } = await import("@google/genai");
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents,
+        contents: [
+          {
+            role: "user",
+            parts: parts,
+          }
+        ],
       });
 
       res.json({ text: response.text });
     } catch (err) {
       console.error("AI Chat handler error:", err);
-      res.status(500).json({ error: "Internal server error during AI generation" });
+      const errMsg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: `Internal server error during AI generation: ${errMsg}` });
     }
   });
 

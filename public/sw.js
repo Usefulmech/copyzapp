@@ -1,5 +1,5 @@
-// CopyZapp Service Worker v2 — PWA + Multi-Network
-const CACHE_NAME = 'copyzapp-v2';
+// CopyZapp Service Worker v4 — PWA + Multi-Network
+const CACHE_NAME = 'copyzapp-v4';
 const SHELL_ASSETS = [
   '/',
   '/index.html',

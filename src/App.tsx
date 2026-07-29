@@ -7,7 +7,7 @@ import { PairingModal } from "./components/PairingModal";
 import { QuickAddModal } from "./components/QuickAddModal";
 import { LightboxModal } from "./components/LightboxModal";
 import { AiChatDrawer } from "./components/AiChatDrawer";
-import { OnboardingWalkthrough } from "./components/OnboardingWalkthrough";
+// Onboarding guide removed
 import { Toast } from "./components/Toast";
 import { playNotificationSound } from "./utils/audio";
 import {
@@ -33,13 +33,13 @@ import {
 
 export default function App() {
   const [tokenInfo, setTokenInfo] = useState<UserTokenInfo | null>(null);
-  const [memories, setMemories] = useState<Memory[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [isPolling, setIsPolling] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
 
   // Network Info
   const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
+  const [memories, setMemories] = useState<Memory[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [isPolling, setIsPolling] = useState<boolean>(false);
 
   // Connection Health
   const [connectionStatus, setConnectionStatus] = useState<"live" | "syncing" | "offline">("live");
@@ -53,9 +53,6 @@ export default function App() {
   const [isPairingOpen, setIsPairingOpen] = useState<boolean>(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false);
   const [activeLightboxImage, setActiveLightboxImage] = useState<{ url: string; title: string } | null>(null);
-
-  // Walkthrough state
-  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
 
   // Notification state
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
@@ -126,10 +123,13 @@ export default function App() {
   // Fetch or initialize user active share token
   const fetchActiveToken = async () => {
     try {
-      const res = await fetch("/api/tokens/active");
+      const localToken = localStorage.getItem("copyzapp_share_token");
+      const url = localToken ? `/api/tokens/active?token=${encodeURIComponent(localToken)}` : "/api/tokens/active";
+      const res = await fetch(url);
       if (res.ok) {
         const data: UserTokenInfo = await res.json();
         setTokenInfo(data);
+        localStorage.setItem("copyzapp_share_token", data.shareToken);
         const manifestEl = document.getElementById("pwa-manifest-link") as HTMLLinkElement;
         if (manifestEl && data.manifestUrl) {
           manifestEl.href = data.manifestUrl;
@@ -202,16 +202,21 @@ export default function App() {
   // Initial Load
   useEffect(() => {
     const init = async () => {
+      // Parse token from query parameter if present
+      const params = new URLSearchParams(window.location.search);
+      const queryToken = params.get("token");
+      if (queryToken) {
+        localStorage.setItem("copyzapp_share_token", queryToken);
+        // Strip token from browser address bar for cleaner URLs
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
       const tokenData = await fetchActiveToken();
       await fetchNetworkInfo();
       if (tokenData) {
         fetchMemories(tokenData.shareToken);
       }
-      // Trigger onboarding for new users
-      const completed = localStorage.getItem("copyzapp_onboarding_completed");
-      if (!completed) {
-        setIsOnboardingOpen(true);
-      }
+      // Onboarding guide auto-popup disabled
     };
     init();
   }, []);
@@ -321,10 +326,16 @@ export default function App() {
   const handleRotateToken = async () => {
     if (confirm("Are you sure you want to rotate your share token? Your old phone share link will stop working.")) {
       try {
-        const res = await fetch("/api/tokens/rotate", { method: "POST" });
+        const res = await fetch("/api/tokens/rotate", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${tokenInfo?.shareToken || ""}`
+          }
+        });
         if (res.ok) {
           const newToken = await res.json();
           setTokenInfo(newToken);
+          localStorage.setItem("copyzapp_share_token", newToken.shareToken);
           // Re-fetch network info so new token is embedded in shareUrls
           await fetchNetworkInfo();
           showToast("Share token rotated!");
@@ -380,7 +391,7 @@ export default function App() {
 
       {/* Hero Banner / Instructions */}
       <div className="bg-[#161618] border-b border-[#1A1A1C] py-2.5 px-3 sm:px-6">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+        <div className="max-w-none mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2 text-gray-300">
             <span className="p-1.5 rounded-md bg-[#212124] text-emerald-400 border border-[#2A2A2C] shrink-0">
               <Zap className="w-3.5 h-3.5 fill-emerald-400/20" />
@@ -401,19 +412,13 @@ export default function App() {
               <QrCode className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span>Pair Phone QR</span>
             </button>
-            <button
-              onClick={() => setIsOnboardingOpen(true)}
-              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-[11px] font-mono font-medium border border-emerald-500/30 transition-colors"
-            >
-              <HelpCircle className="w-3.5 h-3.5 shrink-0" />
-              <span>Setup Guide</span>
-            </button>
+            {/* Setup Guide button removed */}
           </div>
         </div>
       </div>
 
       {/* Main Dashboard — pad bottom for mobile bottom nav */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5 mb-bottom-nav lg:mb-0">
+      <main className="flex-1 max-w-none w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5 mb-bottom-nav lg:mb-0">
 
         {/* PWA & Notification Setup Banner */}
         {(deferredInstallPrompt || (typeof Notification !== "undefined" && notificationPermission === "default")) && (
@@ -448,15 +453,15 @@ export default function App() {
         )}
 
         {/* Search & Filter Toolbar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#161618] p-3 rounded-xl border border-[#2A2A2C]">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#161618] p-3 sm:p-4 rounded-xl border border-[#2A2A2C]">
           {/* Filter Pills */}
           <div className="relative pill-scroll-fade">
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 font-mono no-scrollbar pr-8">
+            <div className="flex items-center gap-2 overflow-x-auto pb-0.5 font-mono no-scrollbar pr-8">
               {filterOptions.map(({ key, label, icon }) => (
                 <button
                   key={key}
                   onClick={() => setActiveFilter(key)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap shrink-0 ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4.5 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap shrink-0 ${
                     activeFilter === key
                       ? key === "pinned"
                         ? "bg-amber-500 text-black font-bold shadow-md shadow-amber-500/10"
@@ -464,7 +469,7 @@ export default function App() {
                       : "bg-[#212124] text-gray-400 hover:text-gray-200 border border-[#2A2A2C]"
                   }`}
                 >
-                  {icon && <span>{icon}</span>}
+                  {icon && <span className="sm:scale-110">{icon}</span>}
                   <span>{label}</span>
                 </button>
               ))}
@@ -472,21 +477,21 @@ export default function App() {
           </div>
 
           {/* Search Box */}
-          <div className="relative min-w-0 sm:min-w-[220px] sm:w-64 font-mono">
-            <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <div className="relative min-w-0 sm:min-w-[240px] sm:w-80 font-mono">
+            <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search snippets..."
-              className="w-full pl-8 pr-10 py-1.5 bg-[#0E0E10] border border-[#2A2A2C] rounded-lg text-xs text-[#E0E0E1] focus:outline-none focus:border-emerald-500 transition-colors"
+              className="w-full pl-8 sm:pl-10 pr-10 py-1.5 sm:py-2.5 bg-[#0E0E10] border border-[#2A2A2C] rounded-lg text-xs sm:text-sm text-[#E0E0E1] focus:outline-none focus:border-emerald-500 transition-colors"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-500 hover:text-gray-300 rounded"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               </button>
             )}
           </div>
@@ -532,13 +537,6 @@ export default function App() {
             </div>
             <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1 font-mono">
               <button
-                onClick={() => setIsOnboardingOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 border border-emerald-500/30 transition-colors"
-              >
-                <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
-                View Setup Guide
-              </button>
-              <button
                 onClick={() => setIsQuickAddOpen(true)}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-xs font-semibold bg-emerald-500 text-black hover:bg-emerald-400 transition-colors shadow-sm"
               >
@@ -551,7 +549,7 @@ export default function App() {
 
         {/* Memory Snippets Grid */}
         {!loading && filteredMemories.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-4">
             <AnimatePresence mode="popLayout">
               {filteredMemories.map((memory) => (
                 <MemoryCard
@@ -571,11 +569,11 @@ export default function App() {
 
       {/* Footer */}
       <footer className="hidden lg:block bg-[#161618] border-t border-[#1A1A1C] py-5 mt-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-400 font-mono">
+        <div className="max-w-none mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-400 font-mono">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-emerald-400" />
             <span className="font-bold text-[#E0E0E1]">CopyZapp Bridge</span>
-            <span>— Share it. Zap it.</span>
+            <span>— Share it. Zapp it.</span>
           </div>
           <div className="flex flex-wrap items-center gap-5 text-[11px]">
             <span className="flex items-center gap-1.5 text-gray-300">
@@ -637,14 +635,7 @@ export default function App() {
             </span>
           </button>
 
-          {/* Onboarding Guide */}
-          <button
-            onClick={() => { setIsFabOpen(false); setIsOnboardingOpen(true); }}
-            className="flex flex-col items-center gap-1 py-2 px-4 text-gray-400 hover:text-emerald-400 transition-colors min-w-[60px]"
-          >
-            <HelpCircle className="w-5 h-5" />
-            <span className="text-[10px] font-mono font-medium">Guide</span>
-          </button>
+          {/* Onboarding Guide button removed */}
         </div>
       </nav>
 
@@ -699,6 +690,15 @@ export default function App() {
         tokenInfo={tokenInfo}
         networkInfo={networkInfo}
         onRotateToken={handleRotateToken}
+        onPair={async (token) => {
+          localStorage.setItem("copyzapp_share_token", token);
+          const data = await fetchActiveToken();
+          if (data) {
+            fetchMemories(data.shareToken);
+          }
+          showToast("Successfully paired!");
+          setIsPairingOpen(false);
+        }}
       />
 
       <QuickAddModal
@@ -729,10 +729,7 @@ export default function App() {
         onClearContext={() => setSelectedMemoryIds([])}
       />
 
-      <OnboardingWalkthrough
-        isOpen={isOnboardingOpen}
-        onClose={() => setIsOnboardingOpen(false)}
-      />
+      {/* OnboardingWalkthrough modal removed */}
 
       {/* Toast */}
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
