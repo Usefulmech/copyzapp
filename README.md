@@ -1,26 +1,27 @@
-# ⚡ CopyZap — Ephemeral Phone-to-PC Clipboard Bridge
+# CopyZap - Phone-to-PC Clipboard Bridge
 
 CopyZap is a local-first, premium, and PWA-responsive clipboard bridge designed to instantly stream text, links, and images from your mobile device directly to your PC. 
 
-Built with **React**, **Express**, **Vite**, and **TailwindCSS**, it functions as a lightweight ephemeral holding tank. All shared content automatically expires and vanishes after 24 hours (unless manually pinned).
+Built with React, Express, Vite, and TailwindCSS, it functions as a lightweight ephemeral holding tank. All shared content automatically expires and vanishes after 24 hours (unless manually pinned).
 
 ---
 
-## ✨ Features
+## Features
 
-- 📶 **Multi-Network Auto-Pairing**:
+- **Multi-Network Auto-Pairing**:
   - **Same Wi-Fi**: Instantly pair when both devices share a local router.
   - **Windows Mobile Hotspot**: Connect your phone directly to your PC's hotspot for low-latency transfers on the go.
   - **Localhost**: Seamless testing via emulators or on a single device.
   - **Cloud Mode**: Global availability via public deployments.
-- 📱 **PWA & Android Share Target**: Install CopyZap as an app. It integrates directly into the Android system share sheet, allowing you to share from Chrome, X, YouTube, or your photo gallery instantly.
-- 🔒 **Capability-Token Security**: Unique randomly-generated API tokens prevent unauthorized pushes to your stream.
-- 💾 **Hybrid Storage System**: Automatic local file storage in development (`data/` folder) and cloud storage via **Vercel KV (Redis)** and **Vercel Blob** in production.
-- 🎨 **Sleek Dark Mode Aesthetics**: Glassmorphic UI with micro-animations, interactive FAB speed dials, and responsive mobile bottom sheets.
+- **PWA & Android Share Target**: Install CopyZap as an app. It integrates directly into the Android system share sheet, allowing you to share from Chrome, X, YouTube, or your photo gallery instantly.
+- **Capability-Token Security**: Unique randomly-generated API tokens prevent unauthorized pushes to your stream.
+- **Hybrid Storage System**: Automatic local file storage in development (data/ folder) and cloud storage via Vercel KV (Redis) and Vercel Blob in production.
+- **Sleek Dark Mode Aesthetics**: Glassmorphic UI with micro-animations, interactive FAB speed dials, and responsive mobile bottom sheets.
+- **Gemini AI Integration**: Contextual chat assistant powered by Google Gemini 2.5 Flash to summarize links, explain images, and query your clipboard streams.
 
 ---
 
-## 🚀 Running Locally
+## Running Locally
 
 ### Prerequisites
 - Node.js (v20+)
@@ -32,7 +33,7 @@ Built with **React**, **Express**, **Vite**, and **TailwindCSS**, it functions a
    npm install
    ```
 2. **Setup Local Environment Variables**:
-   Create a `.env.local` file in the root directory:
+   Create a .env.local file in the root directory:
    ```env
    PORT=3000
    ```
@@ -42,10 +43,10 @@ Built with **React**, **Express**, **Vite**, and **TailwindCSS**, it functions a
    ```
    At startup, the server automatically scans your network adapters and displays all available URLs:
    ```
-   🚀 CopyZap running on http://0.0.0.0:3000
-      🌐 Local:   http://localhost:3000
-      📶 Wi-Fi:   http://192.168.1.15:3000
-      📡 Hotspot: http://192.168.137.1:3000
+   CopyZap running on http://0.0.0.0:3000
+      Local:   http://localhost:3000
+      Wi-Fi:   http://192.168.1.15:3000
+      Hotspot: http://192.168.137.1:3000
    ```
 4. **Pair Your Phone**:
    - Open CopyZap in your PC browser.
@@ -55,27 +56,27 @@ Built with **React**, **Express**, **Vite**, and **TailwindCSS**, it functions a
 
 ---
 
-## 🌐 Production Deployment (Vercel)
+## Production Deployment (Vercel)
 
-CopyZap is fully optimized to deploy to Vercel in seconds with Zero-Configuration.
+CopyZap is configured to deploy directly to https://copyzap.vercel.app with Zero-Configuration.
 
 ### 1. Link Free Storage Integrations (Vercel KV & Vercel Blob)
 Since serverless functions are stateless, CopyZap uses Vercel's free storage offerings:
-*   **Vercel KV (Redis)** (Free 256MB / 3k daily ops): Stores tokens & snippets.
-*   **Vercel Blob** (Free 250MB / 2k monthly ops): Stores shared images.
+* **Vercel KV (Redis)** (Free 256MB / 3k daily ops): Stores tokens & snippets.
+* **Vercel Blob** (Free 250MB / 2k monthly ops): Stores shared images.
 
 #### How to create and link them:
-1. Open your project page in the **Vercel Dashboard**.
-2. Click the **Storage** tab at the top.
-3. **Link KV**: Click **Connect Database** → Select **KV (Redis)** → Click **Create**.
-4. **Link Blob**: Click **Connect Database** again → Select **Blob** → Click **Create**.
+1. Open your project page in the Vercel Dashboard.
+2. Click the Storage tab at the top.
+3. **Link KV**: Click Connect Database → Select KV (Redis) → Click Create.
+4. **Link Blob**: Click Connect Database again → Select Blob → Click Create.
 
 *Vercel will automatically inject all required KV & Blob environment variables into your project settings.*
 
-
 ### 2. Required Environment Variables
 In your Vercel Project settings, configure:
-- `APP_URL`: The production URL of your deployment (e.g., `https://copyzap.vercel.app`). *Required to build accurate QR codes and target endpoints.*
+- `APP_URL`: The production URL of your deployment (set to `https://copyzap.vercel.app`). *Required to build accurate QR codes and target endpoints.*
+- `GEMINI_API_KEY`: Your Google Gemini API Key.
 - `KV_REST_API_URL` & `KV_REST_API_TOKEN`: Automatically populated when you connect Vercel KV.
 - `BLOB_READ_WRITE_TOKEN`: Automatically populated when you connect Vercel Blob.
 
@@ -95,9 +96,9 @@ vercel env pull .env.local
 
 ---
 
-## 📲 Installing as a PWA (Share Sheet Target)
+## Installing as a PWA (Share Sheet Target)
 
-To send text or files directly from your phone's native **Share** menu:
+To send text or files directly from your phone's native Share menu:
 
 ### Android (Google Chrome)
 1. Scan the Pairing QR code on your PC.
@@ -114,7 +115,7 @@ To send text or files directly from your phone's native **Share** menu:
 
 ---
 
-## 🛠️ Project Structure
+## Project Structure
 
 ```
 ├── api/                  # Vercel Serverless Functions
