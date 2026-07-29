@@ -1,0 +1,211 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #0B0B0C;
+    color: #E0E0E1;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+
+  /* Prevent content going under mobile browser chrome */
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* ── Custom dark scrollbar ───────────────────────────────────────────────── */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #0E0E10;
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #2A2A2C;
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #3A3A3C;
+}
+
+/* ── Safe area insets (notch / home bar support) ─────────────────────────── */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 0.75rem);
+}
+.mb-bottom-nav {
+  margin-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ── Mobile Bottom Nav ───────────────────────────────────────────────────── */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 45;
+  background: rgba(11, 11, 12, 0.96);
+  border-top: 1px solid #1A1A1C;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── FAB (Floating Action Button) ───────────────────────────────────────── */
+.fab {
+  position: fixed;
+  z-index: 50;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 8px 32px rgba(16, 185, 129, 0.35),
+    0 2px 8px rgba(0, 0, 0, 0.5);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.2s ease,
+              background-color 0.15s ease;
+}
+.fab:active {
+  transform: scale(0.92);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.25);
+}
+.fab-open {
+  transform: rotate(45deg) scale(1.05);
+}
+
+/* FAB speed-dial menu */
+.fab-menu {
+  position: fixed;
+  z-index: 49;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.fab-menu.hidden-menu {
+  opacity: 0;
+  transform: scale(0.85) translateY(8px);
+  pointer-events: none;
+}
+.fab-menu.visible-menu {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+}
+
+/* ── Modal Bottom Sheet (mobile) ─────────────────────────────────────────── */
+@keyframes slideUpSheet {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes slideDownSheet {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+.bottom-sheet {
+  animation: slideUpSheet 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  border-radius: 1.25rem 1.25rem 0 0;
+}
+
+/* ── Fade In (general modals) ────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fadeIn 0.18s ease forwards;
+}
+
+/* ── Slide Left (AI Drawer) ───────────────────────────────────────────────── */
+@keyframes slideLeft {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.animate-slide-left {
+  animation: slideLeft 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+
+/* ── Gradient fade for scrollable pill rows ──────────────────────────────── */
+.pill-scroll-fade {
+  position: relative;
+}
+.pill-scroll-fade::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 2.5rem;
+  height: 100%;
+  background: linear-gradient(to right, transparent, #161618);
+  pointer-events: none;
+  border-radius: 0 0.75rem 0.75rem 0;
+}
+
+/* ── Connection mode pill ────────────────────────────────────────────────── */
+.conn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.conn-pill-active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+.conn-pill-inactive {
+  background: #212124;
+  border-color: #2A2A2C;
+  color: #9CA3AF;
+}
+.conn-pill-inactive:hover {
+  color: #E0E0E1;
+  border-color: #3A3A3C;
+}
+.conn-pill-disabled {
+  background: #1A1A1C;
+  border-color: #222224;
+  color: #4B5563;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ── Hide scrollbar while keeping scroll ─────────────────────────────────── */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

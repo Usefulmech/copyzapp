@@ -1,0 +1,6 @@
+{
+  "name": "CopyZap",
+  "description": "Ephemeral phone-to-PC bridge for text, links, and images with 24-hour auto-expiration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
