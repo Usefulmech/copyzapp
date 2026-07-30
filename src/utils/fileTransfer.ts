@@ -1,7 +1,9 @@
 export const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 export const MAX_FILE_SIZE_LABEL = "25 MB";
-const COMPRESSION_SIZE_THRESHOLD_BYTES = 800 * 1024;
-const MAX_DIMENSION = 1600;
+// Lower compression threshold to 150 KB so more images are optimized
+const COMPRESSION_SIZE_THRESHOLD_BYTES = 150 * 1024;
+// Limit max dimension to 1200px for lightning-fast uploads and canvas encoding
+const MAX_DIMENSION = 1200;
 
 function loadImageFromFile(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -24,6 +26,7 @@ export async function prepareUploadFile(file: File): Promise<File> {
     return file;
   }
 
+  // GIFs and SVGs should not be compressed to preserve animations/vectors
   if (file.type === "image/gif" || file.type === "image/svg+xml") {
     return file;
   }
@@ -43,17 +46,19 @@ export async function prepareUploadFile(file: File): Promise<File> {
     canvas.height = height;
     context.drawImage(img, 0, 0, width, height);
 
-    const mimeType = file.type === "image/png" ? "image/webp" : "image/jpeg";
+    // Modern WebP format offers 30-50% smaller sizes than JPEG at identical quality
+    const mimeType = "image/webp";
     const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, mimeType, 0.82);
+      canvas.toBlob(resolve, mimeType, 0.75); // 75% quality is the sweet spot
     });
 
     if (!blob || blob.size >= file.size) return file;
 
-    const extension = mimeType === "image/webp" ? ".webp" : ".jpg";
+    const actualType = blob.type;
+    const extension = actualType === "image/webp" ? ".webp" : actualType === "image/png" ? ".png" : ".jpg";
     const optimizedName = file.name.replace(/\.[^.]+$/, extension);
     return new File([blob], optimizedName, {
-      type: mimeType,
+      type: actualType,
       lastModified: Date.now(),
     });
   } catch {

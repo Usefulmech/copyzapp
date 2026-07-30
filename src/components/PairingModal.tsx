@@ -92,6 +92,7 @@ export const PairingModal: React.FC<PairingModalProps> = ({
   const [scanError, setScanError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const openedAt = useRef<number>(Date.now());
 
   // Resolve active share URL based on connection mode + networkInfo (for POST target endpoints)
   const activeShareUrl = (() => {
@@ -321,6 +322,38 @@ export const PairingModal: React.FC<PairingModalProps> = ({
       }
     };
   }, [isOpen]);
+
+  // Reset openedAt timestamp when the modal is opened
+  useEffect(() => {
+    if (isOpen) {
+      openedAt.current = Date.now();
+    }
+  }, [isOpen]);
+
+  // Poll for QR code scanned status while PairingModal is open
+  useEffect(() => {
+    if (!isOpen || !tokenInfo?.shareToken) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/tokens/qr-status?token=${tokenInfo.shareToken}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.scannedAt) {
+            const scanTime = new Date(data.scannedAt).getTime();
+            if (scanTime > openedAt.current) {
+              // Successfully scanned! Call onPair to save, toast, and close modal
+              onPair(tokenInfo.shareToken);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Error polling QR scan status:", err);
+      }
+    }, 1500);
+
+    return () => clearInterval(intervalId);
+  }, [isOpen, tokenInfo?.shareToken, onPair]);
 
   if (!isOpen || !tokenInfo) return null;
 

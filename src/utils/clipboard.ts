@@ -14,12 +14,13 @@ export async function copyToClipboard(text: string): Promise<void> {
   // Fallback: textarea + execCommand (works over plain HTTP / local network)
   const textarea = document.createElement("textarea");
   textarea.value = text;
+  textarea.readOnly = true; // Prevent virtual keyboard from popping up on mobile!
   // Move off-screen so it doesn't flash
   textarea.style.cssText =
     "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;";
   document.body.appendChild(textarea);
-  textarea.focus();
   textarea.select();
+  textarea.setSelectionRange(0, 999999); // Compatibility select for iOS
   try {
     const success = document.execCommand("copy");
     if (!success) throw new Error("execCommand copy failed");
@@ -101,6 +102,13 @@ export async function copyImageToClipboard(imageUrl: string): Promise<{ type: "i
 
   // 2. Fallback: Copy via contenteditable selection (works in HTTP / local network)
   // This copies the image as rich-text HTML, letting target rich editors paste the image.
+  // Skip contenteditable on mobile devices because it triggers virtual keyboard focus, causing freezes/blackouts
+  const isMobile = typeof navigator !== "undefined" && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  if (isMobile) {
+    await copyToClipboard(absoluteUrl);
+    return { type: "url" };
+  }
+
   try {
     const div = document.createElement("div");
     div.contentEditable = "true";

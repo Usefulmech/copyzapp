@@ -30,6 +30,15 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Revoke object URL when previewUrl changes or on unmount to prevent memory leaks
+  React.useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
   if (!isOpen || !tokenInfo) return null;
 
   const selectFile = async (file: File) => {

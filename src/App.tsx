@@ -10,7 +10,7 @@ import { AiChatDrawer } from "./components/AiChatDrawer";
 // Onboarding guide removed
 import { Toast } from "./components/Toast";
 import { playNotificationSound } from "./utils/audio";
-import { MAX_FILE_SIZE_BYTES } from "./utils/fileTransfer";
+import { MAX_FILE_SIZE_BYTES, prepareUploadFile } from "./utils/fileTransfer";
 import {
   Search,
   Zap,
@@ -205,6 +205,13 @@ export default function App() {
       const queryToken = params.get("token");
       if (queryToken) {
         localStorage.setItem("copyzapp_share_token", queryToken);
+        // Notify server that this token has been scanned by a new device
+        fetch("/api/tokens/mark-scanned", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: queryToken }),
+        }).catch((err) => console.warn("Failed to mark token as scanned:", err));
+        
         // Strip token from browser address bar for cleaner URLs
         window.history.replaceState({}, document.title, window.location.pathname);
       }
@@ -251,8 +258,9 @@ export default function App() {
             showToast("File exceeds the 25 MB limit.");
             return;
           }
-          formData.append("image", files[0]);
-          formData.append("title", files[0].type.startsWith("image/") ? "Pasted Image" : files[0].name || "Pasted File");
+          const preparedFile = await prepareUploadFile(files[0]);
+          formData.append("image", preparedFile);
+          formData.append("title", preparedFile.type.startsWith("image/") ? "Pasted Image" : preparedFile.name || "Pasted File");
         } else if (pastedText) {
           formData.append("text", pastedText);
           formData.append("title", pastedText.length > 30 ? pastedText.slice(0, 30) + "..." : "Pasted Snippet");
@@ -686,32 +694,36 @@ export default function App() {
       </div>
 
       {/* Modals */}
-      <PairingModal
-        isOpen={isPairingOpen}
-        onClose={() => setIsPairingOpen(false)}
-        tokenInfo={tokenInfo}
-        networkInfo={networkInfo}
-        onRotateToken={handleRotateToken}
-        onPair={async (token) => {
-          localStorage.setItem("copyzapp_share_token", token);
-          const data = await fetchActiveToken();
-          if (data) {
-            fetchMemories(data.shareToken);
-          }
-          showToast("Successfully paired!");
-          setIsPairingOpen(false);
-        }}
-      />
+      {isPairingOpen && (
+        <PairingModal
+          isOpen={isPairingOpen}
+          onClose={() => setIsPairingOpen(false)}
+          tokenInfo={tokenInfo}
+          networkInfo={networkInfo}
+          onRotateToken={handleRotateToken}
+          onPair={async (token) => {
+            localStorage.setItem("copyzapp_share_token", token);
+            const data = await fetchActiveToken();
+            if (data) {
+              fetchMemories(data.shareToken);
+            }
+            showToast("Successfully paired!");
+            setIsPairingOpen(false);
+          }}
+        />
+      )}
 
-      <QuickAddModal
-        isOpen={isQuickAddOpen}
-        onClose={() => setIsQuickAddOpen(false)}
-        tokenInfo={tokenInfo}
-        onAdded={() => {
-          if (tokenInfo?.shareToken) fetchMemories(tokenInfo.shareToken);
-          showToast("Added memory snippet!");
-        }}
-      />
+      {isQuickAddOpen && (
+        <QuickAddModal
+          isOpen={isQuickAddOpen}
+          onClose={() => setIsQuickAddOpen(false)}
+          tokenInfo={tokenInfo}
+          onAdded={() => {
+            if (tokenInfo?.shareToken) fetchMemories(tokenInfo.shareToken);
+            showToast("Added memory snippet!");
+          }}
+        />
+      )}
 
       {activeLightboxImage && (
         <LightboxModal
@@ -721,15 +733,17 @@ export default function App() {
         />
       )}
 
-      <AiChatDrawer
-        isOpen={isAiChatOpen}
-        onClose={() => setIsAiChatOpen(false)}
-        tokenInfo={tokenInfo}
-        memories={memories}
-        selectedMemoryIds={selectedMemoryIds}
-        onRemoveContext={(id) => setSelectedMemoryIds((prev) => prev.filter((x) => x !== id))}
-        onClearContext={() => setSelectedMemoryIds([])}
-      />
+      {isAiChatOpen && (
+        <AiChatDrawer
+          isOpen={isAiChatOpen}
+          onClose={() => setIsAiChatOpen(false)}
+          tokenInfo={tokenInfo}
+          memories={memories}
+          selectedMemoryIds={selectedMemoryIds}
+          onRemoveContext={(id) => setSelectedMemoryIds((prev) => prev.filter((x) => x !== id))}
+          onClearContext={() => setSelectedMemoryIds([])}
+        />
+      )}
 
       {/* OnboardingWalkthrough modal removed */}
 

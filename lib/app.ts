@@ -490,9 +490,41 @@ export function createApp() {
         cloudUrl,
         serverPort: PORT,
         addresses,
-        localhostUrl: `http://localhost}:${PORT}/api/share-receiver/${shareToken}`,
+        localhostUrl: `http://localhost:${PORT}/api/share-receiver/${shareToken}`,
       });
     } catch (err) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Mark token as scanned (called by phone when scanning QR)
+  app.post("/api/tokens/mark-scanned", async (req, res) => {
+    try {
+      const { token } = req.body;
+      if (!token) return res.status(400).json({ error: "Token is required" });
+      const tokens = await loadTokens();
+      const record = tokens.find(t => t.shareToken === token);
+      if (!record) return res.status(404).json({ error: "Token not found" });
+      record.scannedAt = new Date().toISOString();
+      await saveTokens(tokens);
+      res.json({ success: true, scannedAt: record.scannedAt });
+    } catch (err) {
+      console.error("Mark scanned error:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get QR scan status (polled by PC displaying QR)
+  app.get("/api/tokens/qr-status", async (req, res) => {
+    try {
+      const token = req.query.token as string;
+      if (!token) return res.status(400).json({ error: "Token is required" });
+      const tokens = await loadTokens();
+      const record = tokens.find(t => t.shareToken === token);
+      if (!record) return res.status(404).json({ error: "Token not found" });
+      res.json({ scannedAt: record.scannedAt || null });
+    } catch (err) {
+      console.error("QR status error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   });

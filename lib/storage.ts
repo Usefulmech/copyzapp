@@ -33,6 +33,7 @@ export interface StoredToken {
   userId: string;
   shareToken: string;
   createdAt: string;
+  scannedAt?: string;
 }
 
 // ── Local file paths ──────────────────────────────────────────────────────────
@@ -47,37 +48,71 @@ function ensureLocalDirs() {
   if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
+// Process-level memory caches to eliminate read race conditions
+let cachedMemories: StoredMemory[] | null = null;
+let cachedTokens: StoredToken[] | null = null;
+
 // In-memory fallback stores for Vercel when environment variables are missing/invalid
 let inMemoryMemories: StoredMemory[] = [];
 let inMemoryTokens: StoredToken[] = [];
 
+/**
+ * Helper to perform atomic file writes by writing to a temporary file first,
+ * then renaming it. This prevents concurrent file access from producing empty/corrupted JSON.
+ */
+function safeWriteFileSync(filePath: string, content: string) {
+  const tempPath = `${filePath}.${crypto.randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(tempPath, content, "utf-8");
+    fs.renameSync(tempPath, filePath);
+  } catch (err) {
+    console.warn("Atomic rename failed, falling back to direct write:", err);
+    fs.writeFileSync(filePath, content, "utf-8");
+  } finally {
+    if (fs.existsSync(tempPath)) {
+      try {
+        fs.unlinkSync(tempPath);
+      } catch {}
+    }
+  }
+}
+
 // ── Memories ──────────────────────────────────────────────────────────────────
 
 export async function loadMemories(): Promise<StoredMemory[]> {
+  if (cachedMemories !== null) {
+    return cachedMemories;
+  }
   if (IS_VERCEL) {
     if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
       console.warn("Vercel KV environment variables (KV_REST_API_URL / KV_REST_API_TOKEN) are missing. Falling back to in-memory storage.");
-      return inMemoryMemories;
+      cachedMemories = inMemoryMemories;
+      return cachedMemories;
     }
     try {
       const { kv } = await import("@vercel/kv");
-      return (await kv.get<StoredMemory[]>("copyzap:memories")) ?? [];
+      cachedMemories = (await kv.get<StoredMemory[]>("copyzap:memories")) ?? [];
+      return cachedMemories;
     } catch (err) {
       console.warn("Failed to load memories from Vercel KV, falling back to in-memory storage:", err);
-      return inMemoryMemories;
+      cachedMemories = inMemoryMemories;
+      return cachedMemories;
     }
   }
   try {
     if (fs.existsSync(MEMORIES_FILE)) {
-      return JSON.parse(fs.readFileSync(MEMORIES_FILE, "utf-8")) as StoredMemory[];
+      cachedMemories = JSON.parse(fs.readFileSync(MEMORIES_FILE, "utf-8")) as StoredMemory[];
+      return cachedMemories!;
     }
   } catch (err) {
     console.error("Failed to load memories:", err);
   }
+  cachedMemories = [];
   return [];
 }
 
 export async function saveMemories(memories: StoredMemory[]): Promise<void> {
+  cachedMemories = memories;
   if (IS_VERCEL) {
     if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
       inMemoryMemories = memories;
@@ -94,7 +129,7 @@ export async function saveMemories(memories: StoredMemory[]): Promise<void> {
   }
   try {
     ensureLocalDirs();
-    fs.writeFileSync(MEMORIES_FILE, JSON.stringify(memories, null, 2), "utf-8");
+    safeWriteFileSync(MEMORIES_FILE, JSON.stringify(memories, null, 2));
   } catch (err) {
     console.error("Failed to save memories:", err);
   }
@@ -111,13 +146,17 @@ function createFreshToken(): StoredToken {
 }
 
 export async function loadTokens(): Promise<StoredToken[]> {
+  if (cachedTokens !== null) {
+    return cachedTokens;
+  }
   if (IS_VERCEL) {
     if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
       console.warn("Vercel KV environment variables (KV_REST_API_URL / KV_REST_API_TOKEN) are missing. Falling back to in-memory storage.");
       if (inMemoryTokens.length === 0) {
         inMemoryTokens = [createFreshToken()];
       }
-      return inMemoryTokens;
+      cachedTokens = inMemoryTokens;
+      return cachedTokens;
     }
     try {
       const { kv } = await import("@vercel/kv");
@@ -125,15 +164,18 @@ export async function loadTokens(): Promise<StoredToken[]> {
       if (!tokens || tokens.length === 0) {
         const fresh = createFreshToken();
         await kv.set("copyzap:tokens", [fresh]);
+        cachedTokens = [fresh];
         return [fresh];
       }
+      cachedTokens = tokens;
       return tokens;
     } catch (err) {
       console.warn("Failed to load tokens from Vercel KV, falling back to in-memory storage:", err);
       if (inMemoryTokens.length === 0) {
         inMemoryTokens = [createFreshToken()];
       }
-      return inMemoryTokens;
+      cachedTokens = inMemoryTokens;
+      return cachedTokens;
     }
   }
   // Local
@@ -141,7 +183,10 @@ export async function loadTokens(): Promise<StoredToken[]> {
     if (fs.existsSync(TOKENS_FILE)) {
       const content = fs.readFileSync(TOKENS_FILE, "utf-8");
       const parsed = JSON.parse(content) as StoredToken[];
-      if (parsed && parsed.length > 0) return parsed;
+      if (parsed && parsed.length > 0) {
+        cachedTokens = parsed;
+        return parsed;
+      }
     }
   } catch (err) {
     console.error("Failed to load tokens:", err);
@@ -150,12 +195,14 @@ export async function loadTokens(): Promise<StoredToken[]> {
   const fresh = createFreshToken();
   try {
     ensureLocalDirs();
-    fs.writeFileSync(TOKENS_FILE, JSON.stringify([fresh], null, 2), "utf-8");
+    safeWriteFileSync(TOKENS_FILE, JSON.stringify([fresh], null, 2));
   } catch {}
+  cachedTokens = [fresh];
   return [fresh];
 }
 
 export async function saveTokens(tokens: StoredToken[]): Promise<void> {
+  cachedTokens = tokens;
   if (IS_VERCEL) {
     if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
       inMemoryTokens = tokens;
@@ -172,7 +219,7 @@ export async function saveTokens(tokens: StoredToken[]): Promise<void> {
   }
   try {
     ensureLocalDirs();
-    fs.writeFileSync(TOKENS_FILE, JSON.stringify(tokens, null, 2), "utf-8");
+    safeWriteFileSync(TOKENS_FILE, JSON.stringify(tokens, null, 2));
   } catch (err) {
     console.error("Failed to save tokens:", err);
   }
