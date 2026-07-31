@@ -55,6 +55,8 @@ export interface NetworkInfo {
   addresses: NetworkAddress[];
   /** localhost fallback */
   localhostUrl: string;
+  /** Whether Vercel KV is configured (optional for local/non-Vercel) */
+  kvConfigured?: boolean;
 }
 
 export type ConnectionMode = "cloud" | "wifi" | "hotspot" | "localhost";

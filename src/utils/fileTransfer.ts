@@ -65,3 +65,15 @@ export async function prepareUploadFile(file: File): Promise<File> {
     return file;
   }
 }
+
+/**
+ * Converts a file/blob to a base64 data URL on the client side.
+ */
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
+}

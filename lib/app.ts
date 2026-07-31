@@ -420,7 +420,7 @@ export function createApp() {
         { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
       ],
       share_target: {
-        action: `${host}/api/share-receiver/${shareToken}`,
+        action: `/api/share-receiver/${shareToken}`,
         method: "POST",
         enctype: "multipart/form-data",
         params: {
@@ -486,11 +486,13 @@ export function createApp() {
         }
       }
 
+      const kvConfigured = IS_VERCEL ? Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) : true;
       res.json({
         cloudUrl,
         serverPort: PORT,
         addresses,
         localhostUrl: `http://localhost:${PORT}/api/share-receiver/${shareToken}`,
+        kvConfigured,
       });
     } catch (err) {
       res.status(500).json({ error: "Internal server error" });

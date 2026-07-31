@@ -10,7 +10,7 @@ import { AiChatDrawer } from "./components/AiChatDrawer";
 import { OnboardingWalkthrough } from "./components/OnboardingWalkthrough";
 import { Toast } from "./components/Toast";
 import { playNotificationSound } from "./utils/audio";
-import { MAX_FILE_SIZE_BYTES, prepareUploadFile } from "./utils/fileTransfer";
+import { MAX_FILE_SIZE_BYTES, prepareUploadFile, fileToBase64 } from "./utils/fileTransfer";
 import {
   Search,
   Zap,
@@ -255,27 +255,37 @@ export default function App() {
 
       if (pastedText || files.length > 0) {
         e.preventDefault();
-        const formData = new FormData();
-        formData.append("token", tokenInfo.shareToken);
-
-        if (files.length > 0) {
-          if (files[0].size > MAX_FILE_SIZE_BYTES) {
-            showToast("File exceeds the 25 MB limit.");
-            return;
-          }
-          const preparedFile = await prepareUploadFile(files[0]);
-          formData.append("image", preparedFile);
-          formData.append("title", preparedFile.type.startsWith("image/") ? "Pasted Image" : preparedFile.name || "Pasted File");
-        } else if (pastedText) {
-          formData.append("text", pastedText);
-          formData.append("title", pastedText.length > 30 ? pastedText.slice(0, 30) + "..." : "Pasted Snippet");
-        }
-
+        
         try {
+          let base64Image: string | null = null;
+          let pastedTitle = "Pasted Snippet";
+
+          if (files.length > 0) {
+            if (files[0].size > MAX_FILE_SIZE_BYTES) {
+              showToast("File exceeds the 25 MB limit.");
+              return;
+            }
+            const preparedFile = await prepareUploadFile(files[0]);
+            base64Image = await fileToBase64(preparedFile);
+            pastedTitle = preparedFile.type.startsWith("image/") ? "Pasted Image" : preparedFile.name || "Pasted File";
+          } else if (pastedText) {
+            pastedTitle = pastedText.length > 30 ? pastedText.slice(0, 30) + "..." : "Pasted Snippet";
+          }
+
+          const payload = {
+            token: tokenInfo.shareToken,
+            title: pastedTitle,
+            text: pastedText || undefined,
+            base64Image: base64Image || undefined,
+          };
+
           const res = await fetch("/api/memories", {
             method: "POST",
-            headers: { Authorization: `Bearer ${tokenInfo.shareToken}` },
-            body: formData,
+            headers: { 
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${tokenInfo.shareToken}` 
+            },
+            body: JSON.stringify(payload),
           });
           if (res.ok) {
             showToast("Pasted directly from clipboard!");
@@ -404,6 +414,19 @@ export default function App() {
         onOpenAiChat={() => setIsAiChatOpen(true)}
         onShowGuide={() => setIsGuideOpen(true)}
       />
+
+      {/* Vercel KV Warning Banner */}
+      {networkInfo?.kvConfigured === false && (
+        <div className="bg-[#4a1c10] border-b border-[#7e341b] py-2 px-3 sm:px-6">
+          <div className="max-w-none mx-auto flex items-start sm:items-center gap-2 text-[11px] text-orange-200 font-mono">
+            <span className="px-1.5 py-0.5 rounded bg-orange-700 text-white font-bold shrink-0 text-[9px] uppercase tracking-wider">Warning</span>
+            <div>
+              <span className="font-bold text-white">Vercel KV Database not configured</span>: 
+              You are running in a stateless serverless environment without persistence. Modals, pairing, and snippets will reset unexpectedly on page reload. Please link a Vercel KV store in your Vercel Dashboard.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hero Banner / Instructions */}
       <div className="bg-[#161618] border-b border-[#1A1A1C] py-2.5 px-3 sm:px-6">

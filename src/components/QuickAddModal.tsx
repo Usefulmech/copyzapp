@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { UserTokenInfo } from "../types";
-import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_LABEL, prepareUploadFile } from "../utils/fileTransfer";
+import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_LABEL, prepareUploadFile, fileToBase64 } from "../utils/fileTransfer";
 import {
   X,
   Upload,
@@ -73,19 +73,26 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const formData = new FormData();
-      formData.append("token", tokenInfo.shareToken);
-      if (title) formData.append("title", title);
-      if (text) formData.append("text", text);
-      if (url) formData.append("url", url);
-      if (selectedFile) formData.append("image", selectedFile);
+      let base64Image: string | null = null;
+      if (selectedFile) {
+        base64Image = await fileToBase64(selectedFile);
+      }
+
+      const payload = {
+        token: tokenInfo.shareToken,
+        title: title || undefined,
+        text: text || undefined,
+        url: url || undefined,
+        base64Image: base64Image || undefined,
+      };
 
       const res = await fetch("/api/memories", {
         method: "POST",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${tokenInfo.shareToken}`,
         },
-        body: formData,
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
