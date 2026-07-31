@@ -11,7 +11,8 @@ import {
   Signal,
   Sparkles,
   WifiOff,
-  Download
+  Download,
+  HelpCircle,
 } from "lucide-react";
 
 interface HeaderProps {
@@ -25,6 +26,7 @@ interface HeaderProps {
   onInstallPwa?: () => void;
   canInstallPwa?: boolean;
   onOpenAiChat?: () => void;
+  onShowGuide?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -38,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   onInstallPwa,
   canInstallPwa,
   onOpenAiChat,
+  onShowGuide,
 }) => {
   const statusConfig = {
     live: {
@@ -151,6 +154,17 @@ export const Header: React.FC<HeaderProps> = ({
             <Plus className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
             <span>Quick Add</span>
           </button>
+
+          {/* Help / Guide */}
+          {onShowGuide && (
+            <button
+              onClick={onShowGuide}
+              title="Show Guide"
+              className="p-2 rounded-md bg-[#161618] hover:bg-[#2A2A2C] text-gray-400 hover:text-emerald-400 border border-[#2A2A2C] transition-all"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Mobile: minimal right side — refresh + sparkles AI buttons */}
@@ -163,6 +177,16 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Sparkles className="w-3.5 h-3.5 fill-indigo-400/20 animate-pulse" />
               <span>AI</span>
+            </button>
+          )}
+
+          {onShowGuide && (
+            <button
+              onClick={onShowGuide}
+              title="Show Guide"
+              className="p-2 rounded-lg bg-[#161618] border border-[#2A2A2C] text-gray-400 hover:text-emerald-400 transition-colors"
+            >
+              <HelpCircle className="w-4 h-4" />
             </button>
           )}
 

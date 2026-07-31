@@ -1,5 +1,5 @@
-// CopyZapp Service Worker v5 — PWA + Multi-Network
-const CACHE_NAME = 'copyzapp-v5';
+// CopyZapp Service Worker v6 — PWA + Multi-Network
+const CACHE_NAME = 'copyzapp-v6';
 const SHELL_ASSETS = [
   '/',
   '/index.html',
@@ -30,6 +30,11 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // CRITICAL: Never intercept non-GET requests (POST, PUT, DELETE, PATCH).
+  // FormData bodies cannot be structuredClone'd, which crashes the SW pipeline.
+  // Let the browser handle mutation requests natively.
+  if (event.request.method !== 'GET') return;
+
   const url = new URL(event.request.url);
 
   // /api/network-info — cache with short TTL

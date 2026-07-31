@@ -7,7 +7,7 @@ import { PairingModal } from "./components/PairingModal";
 import { QuickAddModal } from "./components/QuickAddModal";
 import { LightboxModal } from "./components/LightboxModal";
 import { AiChatDrawer } from "./components/AiChatDrawer";
-// Onboarding guide removed
+import { OnboardingWalkthrough } from "./components/OnboardingWalkthrough";
 import { Toast } from "./components/Toast";
 import { playNotificationSound } from "./utils/audio";
 import { MAX_FILE_SIZE_BYTES, prepareUploadFile } from "./utils/fileTransfer";
@@ -27,7 +27,6 @@ import {
   X,
   Wifi,
   WifiOff,
-  HelpCircle,
   Bell,
   Download,
 } from "lucide-react";
@@ -72,6 +71,9 @@ export default function App() {
 
   // FAB open state
   const [isFabOpen, setIsFabOpen] = useState(false);
+
+  // Guide / Onboarding state
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -221,7 +223,10 @@ export default function App() {
       if (tokenData) {
         fetchMemories(tokenData.shareToken);
       }
-      // Onboarding guide auto-popup disabled
+      // Show onboarding guide for first-time users
+      if (!localStorage.getItem("copyzapp_onboarding_completed")) {
+        setIsGuideOpen(true);
+      }
     };
     init();
   }, []);
@@ -397,6 +402,7 @@ export default function App() {
         canInstallPwa={Boolean(deferredInstallPrompt)}
         onInstallPwa={handleInstallPwa}
         onOpenAiChat={() => setIsAiChatOpen(true)}
+        onShowGuide={() => setIsGuideOpen(true)}
       />
 
       {/* Hero Banner / Instructions */}
@@ -745,7 +751,12 @@ export default function App() {
         />
       )}
 
-      {/* OnboardingWalkthrough modal removed */}
+      {isGuideOpen && (
+        <OnboardingWalkthrough
+          isOpen={isGuideOpen}
+          onClose={() => setIsGuideOpen(false)}
+        />
+      )}
 
       {/* Toast */}
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />

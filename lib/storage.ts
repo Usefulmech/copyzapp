@@ -48,7 +48,8 @@ function ensureLocalDirs() {
   if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
-// Process-level memory caches to eliminate read race conditions
+// Process-level memory caches to eliminate read race conditions (LOCAL DEV ONLY).
+// On Vercel, we always read from KV to avoid stale data across warm lambda reuse.
 let cachedMemories: StoredMemory[] | null = null;
 let cachedTokens: StoredToken[] | null = null;
 
@@ -80,23 +81,22 @@ function safeWriteFileSync(filePath: string, content: string) {
 // ── Memories ──────────────────────────────────────────────────────────────────
 
 export async function loadMemories(): Promise<StoredMemory[]> {
-  if (cachedMemories !== null) {
+  // On Vercel: always read from KV (no local cache) to ensure fresh data
+  // across warm lambda reuse. On local dev: use cache to prevent file race conditions.
+  if (!IS_VERCEL && cachedMemories !== null) {
     return cachedMemories;
   }
   if (IS_VERCEL) {
     if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
       console.warn("Vercel KV environment variables (KV_REST_API_URL / KV_REST_API_TOKEN) are missing. Falling back to in-memory storage.");
-      cachedMemories = inMemoryMemories;
-      return cachedMemories;
+      return inMemoryMemories;
     }
     try {
       const { kv } = await import("@vercel/kv");
-      cachedMemories = (await kv.get<StoredMemory[]>("copyzap:memories")) ?? [];
-      return cachedMemories;
+      return (await kv.get<StoredMemory[]>("copyzap:memories")) ?? [];
     } catch (err) {
       console.warn("Failed to load memories from Vercel KV, falling back to in-memory storage:", err);
-      cachedMemories = inMemoryMemories;
-      return cachedMemories;
+      return inMemoryMemories;
     }
   }
   try {
@@ -112,7 +112,7 @@ export async function loadMemories(): Promise<StoredMemory[]> {
 }
 
 export async function saveMemories(memories: StoredMemory[]): Promise<void> {
-  cachedMemories = memories;
+  if (!IS_VERCEL) cachedMemories = memories; // Only cache locally
   if (IS_VERCEL) {
     if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
       inMemoryMemories = memories;
@@ -146,7 +146,9 @@ function createFreshToken(): StoredToken {
 }
 
 export async function loadTokens(): Promise<StoredToken[]> {
-  if (cachedTokens !== null) {
+  // On Vercel: always read from KV (no local cache) to ensure scannedAt
+  // and token data is fresh across warm lambda reuse.
+  if (!IS_VERCEL && cachedTokens !== null) {
     return cachedTokens;
   }
   if (IS_VERCEL) {
@@ -155,8 +157,7 @@ export async function loadTokens(): Promise<StoredToken[]> {
       if (inMemoryTokens.length === 0) {
         inMemoryTokens = [createFreshToken()];
       }
-      cachedTokens = inMemoryTokens;
-      return cachedTokens;
+      return inMemoryTokens;
     }
     try {
       const { kv } = await import("@vercel/kv");
@@ -164,18 +165,15 @@ export async function loadTokens(): Promise<StoredToken[]> {
       if (!tokens || tokens.length === 0) {
         const fresh = createFreshToken();
         await kv.set("copyzap:tokens", [fresh]);
-        cachedTokens = [fresh];
         return [fresh];
       }
-      cachedTokens = tokens;
       return tokens;
     } catch (err) {
       console.warn("Failed to load tokens from Vercel KV, falling back to in-memory storage:", err);
       if (inMemoryTokens.length === 0) {
         inMemoryTokens = [createFreshToken()];
       }
-      cachedTokens = inMemoryTokens;
-      return cachedTokens;
+      return inMemoryTokens;
     }
   }
   // Local
@@ -202,7 +200,7 @@ export async function loadTokens(): Promise<StoredToken[]> {
 }
 
 export async function saveTokens(tokens: StoredToken[]): Promise<void> {
-  cachedTokens = tokens;
+  if (!IS_VERCEL) cachedTokens = tokens; // Only cache locally
   if (IS_VERCEL) {
     if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
       inMemoryTokens = tokens;
