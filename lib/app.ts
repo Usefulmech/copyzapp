@@ -134,9 +134,13 @@ export function createApp() {
     if (!token) {
       const tokens = await loadTokens();
       token = tokens[0]?.shareToken ?? "";
+      console.warn("No token provided in request, using default token");
     }
     const tokenRecord = await validateShareToken(token);
-    if (!tokenRecord) return res.status(401).json({ error: "Unauthorized: Invalid or missing token" });
+    if (!tokenRecord) {
+      console.error("Auth failed: Invalid or missing token", { token: token?.substring(0, 10) + "..." });
+      return res.status(401).json({ error: "Unauthorized: Invalid or missing token" });
+    }
     req.tokenRecord = tokenRecord;
     next();
   };

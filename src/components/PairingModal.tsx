@@ -342,13 +342,16 @@ export const PairingModal: React.FC<PairingModalProps> = ({
           if (data.scannedAt) {
             const scanTime = new Date(data.scannedAt).getTime();
             if (scanTime > openedAt.current) {
+              console.log("QR scan detected, closing modal and pairing");
               // Successfully scanned! Call onPair to save, toast, and close modal
               onPair(tokenInfo.shareToken);
             }
           }
+        } else {
+          console.warn("QR status check failed with status:", res.status);
         }
       } catch (err) {
-        console.warn("Error polling QR scan status:", err);
+        console.error("Error polling QR scan status:", err);
       }
     }, 1500);
 

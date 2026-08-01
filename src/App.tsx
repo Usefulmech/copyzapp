@@ -212,7 +212,15 @@ export default function App() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token: queryToken }),
-        }).catch((err) => console.warn("Failed to mark token as scanned:", err));
+        })
+        .then((res) => {
+          if (!res.ok) {
+            console.error("Mark scanned failed with status:", res.status);
+            return res.json().then(data => console.error("Error data:", data));
+          }
+          console.log("Token successfully marked as scanned");
+        })
+        .catch((err) => console.error("Failed to mark token as scanned:", err));
         
         // Strip token from browser address bar for cleaner URLs
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -731,10 +739,14 @@ export default function App() {
           networkInfo={networkInfo}
           onRotateToken={handleRotateToken}
           onPair={async (token) => {
+            console.log("Pairing with token:", token);
             localStorage.setItem("copyzapp_share_token", token);
             const data = await fetchActiveToken();
             if (data) {
+              console.log("Active token fetched:", data.shareToken);
               fetchMemories(data.shareToken);
+            } else {
+              console.error("Failed to fetch active token after pairing");
             }
             showToast("Successfully paired!");
             setIsPairingOpen(false);

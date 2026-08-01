@@ -40,6 +40,7 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({
   const handleCopyText = async () => {
     try {
       if (memory.imageUrl && isImage) {
+        console.log("Copying image to clipboard:", memory.imageUrl);
         const res = await copyImageToClipboard(memory.imageUrl);
         setCopied(true);
         if (res.type === "image") {
@@ -48,17 +49,20 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({
           onToast("Copied image URL!");
         }
       } else if (memory.imageUrl) {
+        console.log("Copying file URL to clipboard:", memory.imageUrl);
         await copyToClipboard(memory.imageUrl);
         setCopied(true);
         onToast("Copied file URL!");
       } else {
         const textToCopy = memory.body || memory.link || memory.title;
+        console.log("Copying text to clipboard:", textToCopy?.substring(0, 50) + "...");
         await copyToClipboard(textToCopy);
         setCopied(true);
         onToast("Copied to clipboard!");
       }
       setTimeout(() => setCopied(false), 2000);
-    } catch {
+    } catch (err) {
+      console.error("Copy operation failed:", err);
       onToast("Copy failed - try long-pressing the text");
     }
   };
