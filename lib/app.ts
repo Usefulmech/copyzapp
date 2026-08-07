@@ -177,7 +177,8 @@ export function createApp() {
 
         if (file) {
           const source = IS_VERCEL ? file.buffer : file.path;
-          imageUrl = await uploadImage(source, file.filename, file.mimetype);
+          const safeName = file.filename || file.originalname || `upload-${Date.now()}.bin`;
+          imageUrl = await uploadImage(source, safeName, file.mimetype);
           imageType = file.mimetype;
         }
 
@@ -252,7 +253,8 @@ export function createApp() {
 
       if (file) {
         const source = IS_VERCEL ? file.buffer : file.path;
-        imageUrl = await uploadImage(source, file.filename, file.mimetype);
+        const safeName = file.filename || file.originalname || `upload-${Date.now()}.bin`;
+        imageUrl = await uploadImage(source, safeName, file.mimetype);
         imageType = file.mimetype;
       } else if (base64Image && base64Image.startsWith("data:")) {
         try {
@@ -471,8 +473,10 @@ export function createApp() {
       background_color: "#0B0B0C",
       theme_color: "#0B0B0C",
       icons: [
-        { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any maskable" },
-        { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+        { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+        { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
+        { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+        { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
       ],
       share_target: {
         action: `/api/share-receiver/${shareToken}`,

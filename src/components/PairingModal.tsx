@@ -362,20 +362,33 @@ export const PairingModal: React.FC<PairingModalProps> = ({
   };
 
   // Poll for QR code scanned status while PairingModal is open
+  // Two detection strategies:
+  //   1. Primary: /api/tokens/qr-status (requires persistent DB for mark-scanned)
+  //   2. Fallback: /api/health memory count change (works on stateless serverless)
   useEffect(() => {
     if (!isOpen || !tokenInfo?.shareToken) return;
 
-    const initialOpenTimestamp = openedAt.current - 2000; // allow small skew window
+    const initialOpenTimestamp = openedAt.current - 2000;
     let cleared = false;
+    let initialMemoryCount: number | null = null;
+
+    // Capture initial memory count for fallback detection
+    fetch("/api/health")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.memoriesCount != null) initialMemoryCount = data.memoriesCount;
+      })
+      .catch(() => {});
 
     const intervalId = setInterval(async () => {
       if (cleared) return;
       try {
-        const res = await fetch(`/api/tokens/qr-status?token=${tokenInfo.shareToken}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.scannedAt) {
-            const scanTime = new Date(data.scannedAt).getTime();
+        // Strategy 1: Check qr-status (DB-backed scan flag)
+        const qrRes = await fetch(`/api/tokens/qr-status?token=${tokenInfo.shareToken}`);
+        if (qrRes.ok) {
+          const qrData = await qrRes.json();
+          if (qrData.scannedAt) {
+            const scanTime = new Date(qrData.scannedAt).getTime();
             if (scanTime > initialOpenTimestamp) {
               cleared = true;
               clearInterval(intervalId);
@@ -385,13 +398,33 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                 setIsScanSuccess(false);
                 onClose();
               }, 1500);
+              return;
+            }
+          }
+        }
+
+        // Strategy 2: Fallback — detect memory count increase (phone connected & shared)
+        if (initialMemoryCount !== null) {
+          const healthRes = await fetch("/api/health");
+          if (healthRes.ok) {
+            const healthData = await healthRes.json();
+            if (healthData.memoriesCount > initialMemoryCount) {
+              cleared = true;
+              clearInterval(intervalId);
+              setIsScanSuccess(true);
+              setTimeout(() => {
+                onPair(tokenInfo.shareToken);
+                setIsScanSuccess(false);
+                onClose();
+              }, 1500);
+              return;
             }
           }
         }
       } catch (err) {
-        console.error("Error polling QR scan status:", err);
+        console.error("Error polling scan status:", err);
       }
-    }, 1500);
+    }, 2000);
 
     return () => clearInterval(intervalId);
   }, [isOpen, tokenInfo?.shareToken, onPair]);
