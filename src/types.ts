@@ -57,6 +57,8 @@ export interface NetworkInfo {
   localhostUrl: string;
   /** Whether Vercel KV is configured (optional for local/non-Vercel) */
   kvConfigured?: boolean;
+  /** Whether a persistent database (Neon DB / PostgreSQL) is configured */
+  dbConfigured?: boolean;
 }
 
 export type ConnectionMode = "cloud" | "wifi" | "hotspot" | "localhost";

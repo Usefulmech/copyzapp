@@ -366,8 +366,10 @@ export const PairingModal: React.FC<PairingModalProps> = ({
     if (!isOpen || !tokenInfo?.shareToken) return;
 
     const initialOpenTimestamp = openedAt.current - 2000; // allow small skew window
+    let cleared = false;
 
     const intervalId = setInterval(async () => {
+      if (cleared) return;
       try {
         const res = await fetch(`/api/tokens/qr-status?token=${tokenInfo.shareToken}`);
         if (res.ok) {
@@ -375,11 +377,14 @@ export const PairingModal: React.FC<PairingModalProps> = ({
           if (data.scannedAt) {
             const scanTime = new Date(data.scannedAt).getTime();
             if (scanTime > initialOpenTimestamp) {
+              cleared = true;
+              clearInterval(intervalId);
               setIsScanSuccess(true);
               setTimeout(() => {
                 onPair(tokenInfo.shareToken);
                 setIsScanSuccess(false);
-              }, 1200);
+                onClose();
+              }, 1500);
             }
           }
         }

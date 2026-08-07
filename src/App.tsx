@@ -434,14 +434,15 @@ export default function App() {
         onShowGuide={() => setIsGuideOpen(true)}
       />
 
-      {/* Vercel KV Warning Banner */}
-      {networkInfo?.kvConfigured === false && (
+      {/* Database Warning Banner */}
+      {networkInfo && networkInfo.kvConfigured === false && networkInfo.dbConfigured === false && (
         <div className="bg-[#4a1c10] border-b border-[#7e341b] py-2 px-3 sm:px-6">
           <div className="max-w-none mx-auto flex items-start sm:items-center gap-2 text-[11px] text-orange-200 font-mono">
             <span className="px-1.5 py-0.5 rounded bg-orange-700 text-white font-bold shrink-0 text-[9px] uppercase tracking-wider">Warning</span>
             <div>
-              <span className="font-bold text-white">Vercel KV Database not configured</span>: 
-              You are running in a stateless serverless environment without persistence. Modals, pairing, and snippets will reset unexpectedly on page reload. Please link a Vercel KV store in your Vercel Dashboard.
+              <span className="font-bold text-white">Database not configured</span>:{" "}
+              No persistent storage detected. Snippets, pairing, and files will reset on each deploy.
+              Add <code className="bg-orange-900/60 px-1 rounded text-orange-100">DATABASE_URL</code> to your Vercel Dashboard → Project Settings → Environment Variables (use your Neon DB connection string).
             </div>
           </div>
         </div>
