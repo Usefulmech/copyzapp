@@ -71,6 +71,75 @@ export default function App() {
 
   // FAB open state
   const [isFabOpen, setIsFabOpen] = useState(false);
+  const [fabPosition, setFabPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [hasDragged, setHasDragged] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+
+  // Global mouse drag handlers
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      const dx = e.clientX - dragStartRef.current.x;
+      const dy = e.clientY - dragStartRef.current.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 6) {
+        setHasDragged(true);
+      }
+      setFabPosition({
+        x: dragOffsetRef.current.x + dx,
+        y: dragOffsetRef.current.y + dy,
+      });
+    };
+
+    const handleGlobalMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener("mousemove", handleGlobalMouseMove);
+      window.addEventListener("mouseup", handleGlobalMouseUp);
+    }
+    return () => {
+      window.removeEventListener("mousemove", handleGlobalMouseMove);
+      window.removeEventListener("mouseup", handleGlobalMouseUp);
+    };
+  }, [isDragging]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setHasDragged(false);
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    dragOffsetRef.current = { ...fabPosition };
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    setIsDragging(true);
+    setHasDragged(false);
+    dragStartRef.current = { x: touch.clientX, y: touch.clientY };
+    dragOffsetRef.current = { ...fabPosition };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - dragStartRef.current.x;
+    const dy = touch.clientY - dragStartRef.current.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > 6) {
+      setHasDragged(true);
+    }
+    setFabPosition({
+      x: dragOffsetRef.current.x + dx,
+      y: dragOffsetRef.current.y + dy,
+    });
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+  };
 
   // Guide / Onboarding state
   const [isGuideOpen, setIsGuideOpen] = useState(false);
@@ -334,7 +403,11 @@ export default function App() {
   // Memory Action Handlers
   const handleDeleteMemory = async (id: string) => {
     try {
-      const res = await fetch(`/api/memories/${id}`, { method: "DELETE" });
+      const token = tokenInfo?.shareToken;
+      const res = await fetch(`/api/memories/${id}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (res.ok) {
         setMemories((prev) => prev.filter((m) => m.id !== id));
         showToast("Deleted memory snippet");
@@ -346,7 +419,11 @@ export default function App() {
 
   const handleTogglePin = async (id: string) => {
     try {
-      const res = await fetch(`/api/memories/${id}/pin`, { method: "PATCH" });
+      const token = tokenInfo?.shareToken;
+      const res = await fetch(`/api/memories/${id}/pin`, {
+        method: "PATCH",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (res.ok) {
         const updated = await res.json();
         setMemories((prev) =>
@@ -355,7 +432,7 @@ export default function App() {
         showToast(updated.isPinned ? "Snippet Pinned (Immune to 24h cleanup)" : "Snippet Unpinned");
       }
     } catch (err) {
-      console.error("Pin error:", err);
+      console.error("Pin toggle error:", err);
     }
   };
 
@@ -703,7 +780,12 @@ export default function App() {
         {/* Speed Dial Options */}
         <div
           className={`fab-menu ${isFabOpen ? "visible-menu" : "hidden-menu"}`}
-          style={{ right: "1.25rem", bottom: "calc(64px + env(safe-area-inset-bottom, 0px) + 5.5rem)" }}
+          style={{
+            right: "1.25rem",
+            bottom: "calc(64px + env(safe-area-inset-bottom, 0px) + 5.5rem)",
+            transform: `translate(${fabPosition.x}px, ${fabPosition.y}px)`,
+            transition: isDragging ? "none" : "transform 0.15s ease-out",
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           {[
@@ -733,12 +815,27 @@ export default function App() {
 
         {/* FAB Button */}
         <button
-          onClick={(e) => { e.stopPropagation(); setIsFabOpen((o) => !o); }}
-          style={{ right: "1.25rem", bottom: "calc(64px + env(safe-area-inset-bottom, 0px) + 1rem)" }}
-          className={`fab w-14 h-14 bg-emerald-500 text-black ${isFabOpen ? "fab-open" : ""}`}
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!hasDragged) {
+              setIsFabOpen((o) => !o);
+            }
+          }}
+          style={{
+            right: "1.25rem",
+            bottom: "calc(64px + env(safe-area-inset-bottom, 0px) + 1rem)",
+            transform: `translate(${fabPosition.x}px, ${fabPosition.y}px)`,
+            transition: isDragging ? "none" : "transform 0.15s ease-out",
+            touchAction: "none",
+          }}
+          className={`fab w-14 h-14 bg-emerald-500 text-black ${isFabOpen ? "fab-open" : ""} select-none cursor-move`}
           aria-label="Actions"
         >
-          <Plus className="w-6 h-6 stroke-[2.5]" />
+          <Plus className="w-6 h-6 stroke-[2.5] pointer-events-none" />
         </button>
       </div>
 

@@ -592,10 +592,11 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                       <span className="text-sm font-semibold text-[#E0E0E1]">Share Target URL</span>
                       <button
                         onClick={handleCopyUrl}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg transition-colors"
+                        className="inline-flex items-center justify-center gap-1.5 p-2 sm:px-3.5 sm:py-1.5 text-xs font-bold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg transition-colors min-w-[32px] sm:min-w-0"
+                        title={copiedUrl ? "Copied!" : "Copy URL"}
                       >
                         {copiedUrl ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedUrl ? "Copied!" : "Copy URL"}</span>
+                        <span className="hidden sm:inline">{copiedUrl ? "Copied!" : "Copy URL"}</span>
                       </button>
                     </div>
                     <div className="p-3.5 bg-[#161618] rounded-lg border border-[#2A2A2C] font-mono text-xs text-emerald-300 break-all select-all leading-relaxed">
@@ -613,10 +614,11 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                       <span className="text-sm font-semibold text-[#E0E0E1]">Personal Channel Key</span>
                       <button
                         onClick={handleCopyToken}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#212124] text-gray-300 hover:bg-[#2A2A2C] rounded-lg transition-colors border border-[#2A2A2C]"
+                        className="inline-flex items-center justify-center gap-1.5 p-2 sm:px-3 sm:py-1.5 text-xs font-bold bg-[#212124] text-gray-300 hover:bg-[#2A2A2C] rounded-lg transition-colors border border-[#2A2A2C] min-w-[32px] sm:min-w-0"
+                        title={copiedToken ? "Copied Key" : "Copy Key"}
                       >
                         {copiedToken ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedToken ? "Copied Key" : "Copy Key"}</span>
+                        <span className="hidden sm:inline">{copiedToken ? "Copied Key" : "Copy Key"}</span>
                       </button>
                     </div>
                     <div className="font-mono text-xs text-gray-300 bg-[#161618] p-3.5 rounded-lg border border-[#2A2A2C] break-all select-all">
