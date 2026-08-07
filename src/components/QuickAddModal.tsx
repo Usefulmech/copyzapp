@@ -73,27 +73,38 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      let base64Image: string | null = null;
+      let res: Response;
+
       if (selectedFile) {
-        base64Image = await fileToBase64(selectedFile);
+        const formData = new FormData();
+        formData.append("token", tokenInfo.shareToken);
+        if (title) formData.append("title", title);
+        if (text) formData.append("text", text);
+        if (url) formData.append("url", url);
+        formData.append("image", selectedFile);
+
+        res = await fetch("/api/memories", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${tokenInfo.shareToken}`,
+          },
+          body: formData,
+        });
+      } else {
+        res = await fetch("/api/memories", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${tokenInfo.shareToken}`,
+          },
+          body: JSON.stringify({
+            token: tokenInfo.shareToken,
+            title: title || undefined,
+            text: text || undefined,
+            url: url || undefined,
+          }),
+        });
       }
-
-      const payload = {
-        token: tokenInfo.shareToken,
-        title: title || undefined,
-        text: text || undefined,
-        url: url || undefined,
-        base64Image: base64Image || undefined,
-      };
-
-      const res = await fetch("/api/memories", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${tokenInfo.shareToken}`,
-        },
-        body: JSON.stringify(payload),
-      });
 
       if (res.ok) {
         onAdded();
@@ -104,10 +115,12 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
         setPreviewUrl(null);
         onClose();
       } else {
-        alert("Failed to create memory snippet");
+        const errData = await res.json().catch(() => ({}));
+        alert(`Failed to create snippet: ${errData.error || "Server error"}`);
       }
     } catch (err) {
       console.error("Error creating snippet:", err);
+      alert("Network error while creating snippet.");
     } finally {
       setIsSubmitting(false);
     }

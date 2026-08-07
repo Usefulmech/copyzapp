@@ -214,11 +214,9 @@ export default function App() {
           body: JSON.stringify({ token: queryToken }),
         })
         .then((res) => {
-          if (!res.ok) {
-            console.error("Mark scanned failed with status:", res.status);
-            return res.json().then(data => console.error("Error data:", data));
+          if (res.ok) {
+            showToast("Connected to PC! CopyZapp sync active.");
           }
-          console.log("Token successfully marked as scanned");
         })
         .catch((err) => console.error("Failed to mark token as scanned:", err));
         
@@ -265,42 +263,55 @@ export default function App() {
         e.preventDefault();
         
         try {
-          let base64Image: string | null = null;
-          let pastedTitle = "Pasted Snippet";
-
           if (files.length > 0) {
             if (files[0].size > MAX_FILE_SIZE_BYTES) {
               showToast("File exceeds the 25 MB limit.");
               return;
             }
             const preparedFile = await prepareUploadFile(files[0]);
-            base64Image = await fileToBase64(preparedFile);
-            pastedTitle = preparedFile.type.startsWith("image/") ? "Pasted Image" : preparedFile.name || "Pasted File";
+            const formData = new FormData();
+            formData.append("token", tokenInfo.shareToken);
+            formData.append(
+              "title",
+              preparedFile.type.startsWith("image/") ? "Pasted Image" : preparedFile.name || "Pasted File"
+            );
+            if (pastedText) formData.append("text", pastedText);
+            formData.append("image", preparedFile);
+
+            const res = await fetch("/api/memories", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${tokenInfo.shareToken}`,
+              },
+              body: formData,
+            });
+
+            if (res.ok) {
+              showToast("Pasted file directly from clipboard!");
+              fetchMemories(tokenInfo.shareToken);
+            }
           } else if (pastedText) {
-            pastedTitle = pastedText.length > 30 ? pastedText.slice(0, 30) + "..." : "Pasted Snippet";
-          }
-
-          const payload = {
-            token: tokenInfo.shareToken,
-            title: pastedTitle,
-            text: pastedText || undefined,
-            base64Image: base64Image || undefined,
-          };
-
-          const res = await fetch("/api/memories", {
-            method: "POST",
-            headers: { 
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${tokenInfo.shareToken}` 
-            },
-            body: JSON.stringify(payload),
-          });
-          if (res.ok) {
-            showToast("Pasted directly from clipboard!");
-            fetchMemories(tokenInfo.shareToken);
+            const pastedTitle = pastedText.length > 30 ? pastedText.slice(0, 30) + "..." : "Pasted Snippet";
+            const res = await fetch("/api/memories", {
+              method: "POST",
+              headers: { 
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${tokenInfo.shareToken}` 
+              },
+              body: JSON.stringify({
+                token: tokenInfo.shareToken,
+                title: pastedTitle,
+                text: pastedText,
+              }),
+            });
+            if (res.ok) {
+              showToast("Pasted text directly from clipboard!");
+              fetchMemories(tokenInfo.shareToken);
+            }
           }
         } catch (err) {
           console.error("Paste upload error:", err);
+          showToast("Failed to paste content.");
         }
       }
     };

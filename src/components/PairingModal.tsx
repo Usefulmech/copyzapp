@@ -330,9 +330,42 @@ export const PairingModal: React.FC<PairingModalProps> = ({
     }
   }, [isOpen]);
 
+  const [manualKeyInput, setManualKeyInput] = useState("");
+  const [isRestoringKey, setIsRestoringKey] = useState(false);
+  const [isScanSuccess, setIsScanSuccess] = useState(false);
+
+  const handleRestoreKey = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualKeyInput || !manualKeyInput.trim().startsWith("cz-")) {
+      alert("Please enter a valid Channel Key starting with 'cz-'");
+      return;
+    }
+    setIsRestoringKey(true);
+    try {
+      const res = await fetch("/api/tokens/pair-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channelKey: manualKeyInput.trim() }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        onPair(data.shareToken);
+        setManualKeyInput("");
+      } else {
+        alert("Failed to restore workspace with provided key.");
+      }
+    } catch (err) {
+      console.error("Error restoring key:", err);
+    } finally {
+      setIsRestoringKey(false);
+    }
+  };
+
   // Poll for QR code scanned status while PairingModal is open
   useEffect(() => {
     if (!isOpen || !tokenInfo?.shareToken) return;
+
+    const initialOpenTimestamp = openedAt.current - 2000; // allow small skew window
 
     const intervalId = setInterval(async () => {
       try {
@@ -341,14 +374,14 @@ export const PairingModal: React.FC<PairingModalProps> = ({
           const data = await res.json();
           if (data.scannedAt) {
             const scanTime = new Date(data.scannedAt).getTime();
-            if (scanTime > openedAt.current) {
-              console.log("QR scan detected, closing modal and pairing");
-              // Successfully scanned! Call onPair to save, toast, and close modal
-              onPair(tokenInfo.shareToken);
+            if (scanTime > initialOpenTimestamp) {
+              setIsScanSuccess(true);
+              setTimeout(() => {
+                onPair(tokenInfo.shareToken);
+                setIsScanSuccess(false);
+              }, 1200);
             }
           }
-        } else {
-          console.warn("QR status check failed with status:", res.status);
         }
       } catch (err) {
         console.error("Error polling QR scan status:", err);
@@ -382,8 +415,8 @@ export const PairingModal: React.FC<PairingModalProps> = ({
               <QrCode className="w-4.5 h-4.5" />
             </div>
             <div>
-              <h2 className="text-lg font-extrabold text-[#E0E0E1] tracking-tight">Phone Pairing & Setup</h2>
-              <p className="text-xs text-gray-400 font-mono">Connect your device to this CopyZapp bridge</p>
+              <h2 className="text-lg font-extrabold text-[#E0E0E1] tracking-tight">CopyZapp Pairing & Session Management</h2>
+              <p className="text-xs text-gray-400 font-mono">Connect your phone or restore your personal workspace</p>
             </div>
           </div>
           <button
@@ -478,7 +511,17 @@ export const PairingModal: React.FC<PairingModalProps> = ({
               {/* QR + Info side by side on desktop */}
               <div className="flex flex-col sm:flex-row gap-7 items-stretch">
                 {/* QR Code Card */}
-                <div className="flex flex-col items-center justify-center p-6 bg-[#0E0E10] border border-[#2A2A2C] rounded-xl w-full sm:w-auto sm:min-w-[240px] shrink-0 shadow-sm">
+                <div className="relative flex flex-col items-center justify-center p-6 bg-[#0E0E10] border border-[#2A2A2C] rounded-xl w-full sm:w-auto sm:min-w-[240px] shrink-0 shadow-sm">
+                  {isScanSuccess && (
+                    <div className="absolute inset-0 bg-emerald-950/95 backdrop-blur-md rounded-xl z-20 flex flex-col items-center justify-center space-y-3 p-4 animate-fade-in">
+                      <div className="w-14 h-14 rounded-full bg-emerald-500 text-black flex items-center justify-center shadow-lg shadow-emerald-500/30 animate-bounce">
+                        <Check className="w-8 h-8 stroke-[3]" />
+                      </div>
+                      <span className="text-sm font-black font-mono text-emerald-300">Phone Connected!</span>
+                      <span className="text-[11px] font-mono text-emerald-400/80 text-center">Sync channel is now active</span>
+                    </div>
+                  )}
+
                   <div className="p-3.5 bg-white rounded-lg shadow-inner flex items-center justify-center">
                     {isQrLoading ? (
                       <div className="w-40 h-40 sm:w-44 sm:h-44 flex items-center justify-center">
@@ -497,7 +540,7 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                     )}
                   </div>
                   <span className="text-[11px] font-bold text-gray-400 mt-4 text-center font-mono">
-                    Scan with Android Camera
+                    Scan with Phone Camera
                   </span>
                   <span className={`mt-2 text-xs font-black uppercase tracking-wider font-mono ${activeModeInfo?.color || "text-gray-400"}`}>
                     {activeModeInfo?.label} Mode
@@ -529,19 +572,40 @@ export const PairingModal: React.FC<PairingModalProps> = ({
                   {/* Token key */}
                   <div className="p-5 rounded-xl bg-[#0E0E10] border border-[#2A2A2C] space-y-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-[#E0E0E1]">Share Token</span>
+                      <span className="text-sm font-semibold text-[#E0E0E1]">Personal Channel Key</span>
                       <button
                         onClick={handleCopyToken}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#212124] text-gray-300 hover:bg-[#2A2A2C] rounded-lg transition-colors border border-[#2A2A2C]"
                       >
                         {copiedToken ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedToken ? "Copied" : "Copy"}</span>
+                        <span>{copiedToken ? "Copied Key" : "Copy Key"}</span>
                       </button>
                     </div>
                     <div className="font-mono text-xs text-gray-300 bg-[#161618] p-3.5 rounded-lg border border-[#2A2A2C] break-all select-all">
                       {tokenInfo.shareToken}
                     </div>
                   </div>
+
+                  {/* Manual Restore Key Form */}
+                  <form onSubmit={handleRestoreKey} className="p-4 rounded-xl bg-[#0E0E10] border border-[#2A2A2C] space-y-3">
+                    <span className="text-xs font-bold text-gray-300 font-mono block">Restore Existing Workspace Session</span>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={manualKeyInput}
+                        onChange={(e) => setManualKeyInput(e.target.value)}
+                        placeholder="Paste your Channel Key (cz-...)"
+                        className="flex-1 px-3 py-2 bg-[#161618] border border-[#2A2A2C] rounded-lg text-xs font-mono text-emerald-300 focus:outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isRestoringKey}
+                        className="px-3.5 py-2 text-xs font-mono font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors disabled:opacity-50 shrink-0"
+                      >
+                        {isRestoringKey ? "Restoring..." : "Restore Key"}
+                      </button>
+                    </div>
+                  </form>
 
                   <div className="pt-2">
                     <button

@@ -1,8 +1,10 @@
 import React from "react";
 import { UserTokenInfo } from "../types";
+import { getDeviceInfo } from "../utils/deviceInfo";
 import {
   Zap,
   Smartphone,
+  Laptop,
   QrCode,
   Plus,
   RefreshCw,
@@ -42,6 +44,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAiChat,
   onShowGuide,
 }) => {
+  const deviceInfo = getDeviceInfo(tokenInfo?.shareToken);
+
   const statusConfig = {
     live: {
       dot: "bg-emerald-500 animate-pulse",
@@ -89,11 +93,23 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Desktop: Live Sync Status Indicator */}
-        <div className="hidden lg:flex items-center gap-2.5 px-3 py-1.5 rounded-md bg-[#161618] border border-[#2A2A2C] text-xs font-mono text-gray-300">
+        {/* Desktop: Live Sync Status Indicator + Device Identity Pill */}
+        <div className="hidden lg:flex items-center gap-2.5 px-3.5 py-1.5 rounded-lg bg-[#161618] border border-[#2A2A2C] text-xs font-mono text-gray-300 shadow-sm">
           <span className={`w-2 h-2 rounded-full ${statusConfig.dot}`} />
-          <span className={`uppercase text-[11px] tracking-wider font-semibold ${statusConfig.text}`}>
+          <span className={`uppercase text-[11px] tracking-wider font-extrabold ${statusConfig.text}`}>
             {statusConfig.label}
+          </span>
+          <span className="text-gray-600">|</span>
+          <div className="flex items-center gap-1.5 text-gray-200 font-semibold">
+            {deviceInfo.type === "phone" ? (
+              <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
+            ) : (
+              <Laptop className="w-3.5 h-3.5 text-emerald-400" />
+            )}
+            <span>{deviceInfo.name}</span>
+          </div>
+          <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-bold text-[10px]">
+            {deviceInfo.channelPin}
           </span>
           {lastSyncTime && connectionStatus !== "offline" && (
             <span className="text-gray-500 text-[10px]">
@@ -106,7 +122,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="p-1 hover:text-emerald-400 text-gray-400 rounded transition-colors ml-1"
             disabled={connectionStatus === "offline"}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isPolling ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isPolling ? "animate-spin text-emerald-400" : ""}`} />
           </button>
         </div>
 

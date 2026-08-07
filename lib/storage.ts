@@ -1,7 +1,8 @@
 /**
- * CopyZap — Storage Abstraction Layer
+ * CopyZapp — Storage Abstraction Layer
  *
  * Automatically selects the right storage backend:
+ *  - Neon DB    → PostgreSQL (requires DATABASE_URL or NEON_DATABASE_URL)
  *  - Local dev  → JSON files on disk  (data/memories.json, data/tokens.json)
  *                  Images              → data/uploads/
  *  - Vercel     → Vercel KV (Redis)   (requires KV_REST_API_URL + KV_REST_API_TOKEN)
@@ -13,6 +14,7 @@ import path from "path";
 import crypto from "crypto";
 
 export const IS_VERCEL = Boolean(process.env.VERCEL);
+const DATABASE_URL = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
 
 // ── Shared interfaces ─────────────────────────────────────────────────────────
 
@@ -36,6 +38,71 @@ export interface StoredToken {
   scannedAt?: string;
 }
 
+// ── PostgreSQL / Neon Database Setup ──────────────────────────────────────────
+
+let dbPool: any = null;
+let dbInitialized = false;
+
+async function getDbPool() {
+  if (!DATABASE_URL) return null;
+  if (dbPool) return dbPool;
+
+  try {
+    const pg = await import("pg");
+    const { Pool } = pg.default || pg;
+    dbPool = new Pool({
+      connectionString: DATABASE_URL,
+      ssl: DATABASE_URL.includes("localhost") || DATABASE_URL.includes("127.0.0.1")
+        ? false
+        : { rejectUnauthorized: false },
+      max: 10,
+      idleTimeoutMillis: 30000,
+    });
+
+    if (!dbInitialized) {
+      await initDbSchema(dbPool);
+      dbInitialized = true;
+    }
+    return dbPool;
+  } catch (err) {
+    console.error("Failed to initialize PostgreSQL pool:", err);
+    return null;
+  }
+}
+
+async function initDbSchema(pool: any) {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS copyzapp_tokens (
+        user_id VARCHAR(64) NOT NULL,
+        share_token VARCHAR(128) PRIMARY KEY,
+        created_at TIMESTAMPTZ NOT NULL,
+        scanned_at TIMESTAMPTZ
+      );
+
+      CREATE TABLE IF NOT EXISTS copyzapp_memories (
+        id VARCHAR(64) PRIMARY KEY,
+        user_id VARCHAR(64) NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT,
+        link TEXT,
+        image_url TEXT,
+        image_type TEXT,
+        created_at TIMESTAMPTZ NOT NULL,
+        is_pinned BOOLEAN DEFAULT FALSE,
+        archived_at TIMESTAMPTZ
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_memories_user_id ON copyzapp_memories(user_id);
+      CREATE INDEX IF NOT EXISTS idx_memories_created_at ON copyzapp_memories(created_at);
+      CREATE INDEX IF NOT EXISTS idx_tokens_user_id ON copyzapp_tokens(user_id);
+    `);
+    console.log("CopyZapp Neon DB tables verified/created successfully.");
+  } catch (err) {
+    console.error("Failed to initialize CopyZapp DB schema:", err);
+  }
+}
+
 // ── Local file paths ──────────────────────────────────────────────────────────
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -49,17 +116,16 @@ function ensureLocalDirs() {
 }
 
 // Process-level memory caches to eliminate read race conditions (LOCAL DEV ONLY).
-// On Vercel, we always read from KV to avoid stale data across warm lambda reuse.
 let cachedMemories: StoredMemory[] | null = null;
 let cachedTokens: StoredToken[] | null = null;
 
-// In-memory fallback stores for Vercel when environment variables are missing/invalid
+// In-memory fallback stores
 let inMemoryMemories: StoredMemory[] = [];
 let inMemoryTokens: StoredToken[] = [];
 
 /**
  * Helper to perform atomic file writes by writing to a temporary file first,
- * then renaming it. This prevents concurrent file access from producing empty/corrupted JSON.
+ * then renaming it.
  */
 function safeWriteFileSync(filePath: string, content: string) {
   const tempPath = `${filePath}.${crypto.randomUUID()}.tmp`;
@@ -81,23 +147,52 @@ function safeWriteFileSync(filePath: string, content: string) {
 // ── Memories ──────────────────────────────────────────────────────────────────
 
 export async function loadMemories(): Promise<StoredMemory[]> {
-  // On Vercel: always read from KV (no local cache) to ensure fresh data
-  // across warm lambda reuse. On local dev: use cache to prevent file race conditions.
-  if (!IS_VERCEL && cachedMemories !== null) {
-    return cachedMemories;
+  // 1. Try Neon DB / PostgreSQL
+  const pool = await getDbPool();
+  if (pool) {
+    try {
+      const res = await pool.query(`
+        SELECT
+          id,
+          user_id AS "userId",
+          title,
+          body,
+          link,
+          image_url AS "imageUrl",
+          image_type AS "imageType",
+          created_at AS "createdAt",
+          is_pinned AS "isPinned",
+          archived_at AS "archivedAt"
+        FROM copyzapp_memories
+        ORDER BY created_at DESC
+      `);
+      return res.rows.map((row: any) => ({
+        ...row,
+        createdAt: new Date(row.createdAt).toISOString(),
+        archivedAt: row.archivedAt ? new Date(row.archivedAt).toISOString() : null,
+      }));
+    } catch (err) {
+      console.error("Failed to load memories from Neon DB, falling back:", err);
+    }
   }
+
+  // 2. Try Vercel KV
   if (IS_VERCEL) {
     if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
-      console.warn("Vercel KV environment variables (KV_REST_API_URL / KV_REST_API_TOKEN) are missing. Falling back to in-memory storage.");
       return inMemoryMemories;
     }
     try {
       const { kv } = await import("@vercel/kv");
       return (await kv.get<StoredMemory[]>("copyzap:memories")) ?? [];
     } catch (err) {
-      console.warn("Failed to load memories from Vercel KV, falling back to in-memory storage:", err);
+      console.warn("Failed to load memories from Vercel KV, falling back:", err);
       return inMemoryMemories;
     }
+  }
+
+  // 3. Try Local JSON File
+  if (!IS_VERCEL && cachedMemories !== null) {
+    return cachedMemories;
   }
   try {
     if (fs.existsSync(MEMORIES_FILE)) {
@@ -112,7 +207,60 @@ export async function loadMemories(): Promise<StoredMemory[]> {
 }
 
 export async function saveMemories(memories: StoredMemory[]): Promise<void> {
-  if (!IS_VERCEL) cachedMemories = memories; // Only cache locally
+  if (!IS_VERCEL) cachedMemories = memories;
+
+  // 1. Save to Neon DB / PostgreSQL
+  const pool = await getDbPool();
+  if (pool) {
+    try {
+      // Sync memories to Postgres table
+      for (const m of memories) {
+        await pool.query(
+          `
+          INSERT INTO copyzapp_memories (
+            id, user_id, title, body, link, image_url, image_type, created_at, is_pinned, archived_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          ON CONFLICT (id) DO UPDATE SET
+            title = EXCLUDED.title,
+            body = EXCLUDED.body,
+            link = EXCLUDED.link,
+            image_url = EXCLUDED.image_url,
+            image_type = EXCLUDED.image_type,
+            is_pinned = EXCLUDED.is_pinned,
+            archived_at = EXCLUDED.archived_at
+        `,
+          [
+            m.id,
+            m.userId,
+            m.title,
+            m.body,
+            m.link,
+            m.imageUrl,
+            m.imageType,
+            m.createdAt,
+            m.isPinned,
+            m.archivedAt,
+          ]
+        );
+      }
+
+      // Delete items removed from memories list
+      if (memories.length > 0) {
+        const ids = memories.map((m) => m.id);
+        await pool.query(
+          `DELETE FROM copyzapp_memories WHERE NOT (id = ANY($1::varchar[]))`,
+          [ids]
+        );
+      } else {
+        await pool.query(`DELETE FROM copyzapp_memories`);
+      }
+      return;
+    } catch (err) {
+      console.error("Failed to save memories to Neon DB:", err);
+    }
+  }
+
+  // 2. Save to Vercel KV
   if (IS_VERCEL) {
     if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
       inMemoryMemories = memories;
@@ -122,11 +270,12 @@ export async function saveMemories(memories: StoredMemory[]): Promise<void> {
       const { kv } = await import("@vercel/kv");
       await kv.set("copyzap:memories", memories);
     } catch (err) {
-      console.warn("Failed to save memories to Vercel KV, saving to in-memory fallback:", err);
       inMemoryMemories = memories;
     }
     return;
   }
+
+  // 3. Save to Local JSON File
   try {
     ensureLocalDirs();
     safeWriteFileSync(MEMORIES_FILE, JSON.stringify(memories, null, 2));
@@ -146,14 +295,41 @@ function createFreshToken(): StoredToken {
 }
 
 export async function loadTokens(): Promise<StoredToken[]> {
-  // On Vercel: always read from KV (no local cache) to ensure scannedAt
-  // and token data is fresh across warm lambda reuse.
-  if (!IS_VERCEL && cachedTokens !== null) {
-    return cachedTokens;
+  // 1. Try Neon DB / PostgreSQL
+  const pool = await getDbPool();
+  if (pool) {
+    try {
+      const res = await pool.query(`
+        SELECT
+          user_id AS "userId",
+          share_token AS "shareToken",
+          created_at AS "createdAt",
+          scanned_at AS "scannedAt"
+        FROM copyzapp_tokens
+        ORDER BY created_at ASC
+      `);
+      if (res.rows.length > 0) {
+        return res.rows.map((row: any) => ({
+          ...row,
+          createdAt: new Date(row.createdAt).toISOString(),
+          scannedAt: row.scannedAt ? new Date(row.scannedAt).toISOString() : undefined,
+        }));
+      }
+      // If table is empty, seed a fresh token
+      const fresh = createFreshToken();
+      await pool.query(
+        `INSERT INTO copyzapp_tokens (user_id, share_token, created_at) VALUES ($1, $2, $3)`,
+        [fresh.userId, fresh.shareToken, fresh.createdAt]
+      );
+      return [fresh];
+    } catch (err) {
+      console.error("Failed to load tokens from Neon DB:", err);
+    }
   }
+
+  // 2. Try Vercel KV
   if (IS_VERCEL) {
     if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
-      console.warn("Vercel KV environment variables (KV_REST_API_URL / KV_REST_API_TOKEN) are missing. Falling back to in-memory storage.");
       if (inMemoryTokens.length === 0) {
         inMemoryTokens = [createFreshToken()];
       }
@@ -169,14 +345,17 @@ export async function loadTokens(): Promise<StoredToken[]> {
       }
       return tokens;
     } catch (err) {
-      console.warn("Failed to load tokens from Vercel KV, falling back to in-memory storage:", err);
       if (inMemoryTokens.length === 0) {
         inMemoryTokens = [createFreshToken()];
       }
       return inMemoryTokens;
     }
   }
-  // Local
+
+  // 3. Try Local JSON File
+  if (!IS_VERCEL && cachedTokens !== null) {
+    return cachedTokens;
+  }
   try {
     if (fs.existsSync(TOKENS_FILE)) {
       const content = fs.readFileSync(TOKENS_FILE, "utf-8");
@@ -189,7 +368,7 @@ export async function loadTokens(): Promise<StoredToken[]> {
   } catch (err) {
     console.error("Failed to load tokens:", err);
   }
-  // Generate fresh default
+
   const fresh = createFreshToken();
   try {
     ensureLocalDirs();
@@ -200,7 +379,31 @@ export async function loadTokens(): Promise<StoredToken[]> {
 }
 
 export async function saveTokens(tokens: StoredToken[]): Promise<void> {
-  if (!IS_VERCEL) cachedTokens = tokens; // Only cache locally
+  if (!IS_VERCEL) cachedTokens = tokens;
+
+  // 1. Save to Neon DB / PostgreSQL
+  const pool = await getDbPool();
+  if (pool) {
+    try {
+      for (const t of tokens) {
+        await pool.query(
+          `
+          INSERT INTO copyzapp_tokens (user_id, share_token, created_at, scanned_at)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (share_token) DO UPDATE SET
+            user_id = EXCLUDED.user_id,
+            scanned_at = EXCLUDED.scanned_at
+        `,
+          [t.userId, t.shareToken, t.createdAt, t.scannedAt || null]
+        );
+      }
+      return;
+    } catch (err) {
+      console.error("Failed to save tokens to Neon DB:", err);
+    }
+  }
+
+  // 2. Save to Vercel KV
   if (IS_VERCEL) {
     if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
       inMemoryTokens = tokens;
@@ -210,11 +413,12 @@ export async function saveTokens(tokens: StoredToken[]): Promise<void> {
       const { kv } = await import("@vercel/kv");
       await kv.set("copyzap:tokens", tokens);
     } catch (err) {
-      console.warn("Failed to save tokens to Vercel KV, saving to in-memory fallback:", err);
       inMemoryTokens = tokens;
     }
     return;
   }
+
+  // 3. Save to Local JSON File
   try {
     ensureLocalDirs();
     safeWriteFileSync(TOKENS_FILE, JSON.stringify(tokens, null, 2));
@@ -229,18 +433,18 @@ export const upload = multer({
   storage: IS_VERCEL
     ? multer.memoryStorage()
     : multer.diskStorage({
-        destination: (req, file, cb) => {
+        destination: (_req, _file, cb) => {
           ensureLocalDirs();
           cb(null, UPLOADS_DIR);
         },
-        filename: (req, file, cb) => {
+        filename: (_req, file, cb) => {
           const sanitized = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, "_");
           cb(null, `${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${sanitized}`);
         },
       }),
   limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
-  fileFilter: (_req, file, cb) => {
-    cb(null, true); // Allow any file type
+  fileFilter: (_req, _file, cb) => {
+    cb(null, true);
   },
 });
 
@@ -290,7 +494,7 @@ export async function uploadImage(
     try {
       const { put } = await import("@vercel/blob");
       const body = source instanceof Buffer ? source : fs.createReadStream(source);
-      const blob = await put(`copyzap-uploads/${safeFilename}`, body, {
+      const blob = await put(`copyzapp-uploads/${safeFilename}`, body, {
         access: "public",
         contentType: mimetype,
       });
@@ -305,11 +509,9 @@ export async function uploadImage(
 
   // Local dev: source is a file path
   if (typeof source === "string") {
-    // The file is already at its final destination thanks to multer.diskStorage.
-    // We just need to return the web-accessible URL.
     return `/uploads/${path.basename(source)}`;
   }
-  // Fallback for local if we get a buffer somehow (e.g. base64 upload)
+
   ensureLocalDirs();
   fs.writeFileSync(path.join(UPLOADS_DIR, safeFilename), source);
   return `/uploads/${safeFilename}`;
@@ -322,12 +524,8 @@ export async function uploadImage(
  */
 export async function deleteImage(imageUrl: string): Promise<void> {
   if (IS_VERCEL) {
-    if (imageUrl.startsWith("data:")) {
-      return; // Base64 data URL has no remote resource to delete
-    }
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      return;
-    }
+    if (imageUrl.startsWith("data:")) return;
+    if (!process.env.BLOB_READ_WRITE_TOKEN) return;
     try {
       const { del } = await import("@vercel/blob");
       await del(imageUrl);
@@ -346,3 +544,4 @@ export async function deleteImage(imageUrl: string): Promise<void> {
     }
   }
 }
+

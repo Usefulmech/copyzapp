@@ -88,8 +88,8 @@ export async function performCleanup(): Promise<number> {
 export function createApp() {
   const app = express();
 
-  app.use(express.json({ limit: "10mb" }));
-  app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
   // CORS
   app.use((req, res, next) => {
@@ -300,7 +300,6 @@ export function createApp() {
       const memory = memories.find(m => m.id === req.params.id);
       if (!memory) return res.status(404).json({ error: "Snippet not found" });
       
-      // Basic authorization: can this user modify this snippet?
       if (memory.userId !== req.tokenRecord!.userId) {
           return res.status(403).json({ error: "Forbidden" });
       }
@@ -334,7 +333,7 @@ export function createApp() {
     }
   });
 
-  // Get active token (supports client-specific tokens for multi-tenancy)
+  // Get active token (supports client-specific tokens for multi-tenancy & session recovery)
   app.get("/api/tokens/active", async (req, res) => {
     try {
       const clientToken = req.query.token as string;
@@ -351,9 +350,28 @@ export function createApp() {
             manifestUrl: `${host}/api/manifest/${existing.shareToken}`,
           });
         }
+
+        // If client token is valid format (e.g. cz-xxx), preserve it to prevent identity loss on server restart
+        if (clientToken.startsWith("cz-") && clientToken.length >= 10) {
+          const preservedToken: StoredToken = {
+            userId: "user_" + crypto.randomUUID().slice(0, 8),
+            shareToken: clientToken,
+            createdAt: new Date().toISOString(),
+          };
+          tokens.push(preservedToken);
+          await saveTokens(tokens);
+
+          const host = process.env.APP_URL ?? `http://localhost:${PORT}`;
+          return res.json({
+            userId: preservedToken.userId,
+            shareToken: preservedToken.shareToken,
+            shareUrl: `${host}/api/share-receiver/${preservedToken.shareToken}`,
+            manifestUrl: `${host}/api/manifest/${preservedToken.shareToken}`,
+          });
+        }
       }
 
-      // If no valid client token was provided, generate a new isolated token!
+      // If no valid client token was provided, generate a new isolated token
       const newToken: StoredToken = {
         userId: "user_" + crypto.randomUUID().slice(0, 8),
         shareToken: "cz-" + crypto.randomUUID().replace(/-/g, ""),
@@ -368,6 +386,39 @@ export function createApp() {
         shareToken: newToken.shareToken,
         shareUrl: `${host}/api/share-receiver/${newToken.shareToken}`,
         manifestUrl: `${host}/api/manifest/${newToken.shareToken}`,
+      });
+    } catch (err) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Pair or restore explicit Channel Key (Manual Session Recovery)
+  app.post("/api/tokens/pair-key", async (req, res) => {
+    try {
+      const { channelKey } = req.body;
+      if (!channelKey || typeof channelKey !== "string" || !channelKey.startsWith("cz-")) {
+        return res.status(400).json({ error: "Invalid Channel Key format. Keys must start with 'cz-'" });
+      }
+
+      let tokens = await loadTokens();
+      let existing = tokens.find(t => t.shareToken === channelKey);
+
+      if (!existing) {
+        existing = {
+          userId: "user_" + crypto.randomUUID().slice(0, 8),
+          shareToken: channelKey.trim(),
+          createdAt: new Date().toISOString(),
+        };
+        tokens.push(existing);
+        await saveTokens(tokens);
+      }
+
+      const host = process.env.APP_URL ?? `http://localhost:${PORT}`;
+      res.json({
+        userId: existing.userId,
+        shareToken: existing.shareToken,
+        shareUrl: `${host}/api/share-receiver/${existing.shareToken}`,
+        manifestUrl: `${host}/api/manifest/${existing.shareToken}`,
       });
     } catch (err) {
       res.status(500).json({ error: "Internal server error" });
@@ -490,13 +541,14 @@ export function createApp() {
         }
       }
 
-      const kvConfigured = IS_VERCEL ? Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) : true;
+      const dbConfigured = Boolean(process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || (IS_VERCEL ? (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) : true));
       res.json({
         cloudUrl,
         serverPort: PORT,
         addresses,
         localhostUrl: `http://localhost:${PORT}/api/share-receiver/${shareToken}`,
-        kvConfigured,
+        kvConfigured: dbConfigured,
+        dbConfigured,
       });
     } catch (err) {
       res.status(500).json({ error: "Internal server error" });
